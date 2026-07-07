@@ -58,9 +58,14 @@ const steps = [
 
 const exampleActivities = [
   {name: '전공탐색 퀴즈 대회', desc: '학생 주도 참여'},
-  {name: '전공 도서 독후감', desc: '독서 기록 활동'},
   {name: '진로 상담 프로그램', desc: '개별 상담 참여'},
   {name: '직업인 특강 청취', desc: '외부 강사 연계'},
+]
+
+const aiActivities = [
+  {name: '머신러닝 실습', desc: '모델 학습 및 결과 분석'},
+  {name: 'AI 윤리 토론', desc: '사회적 영향 탐구 활동'},
+  {name: '프로젝트 발표', desc: '팀 기반 문제 해결 발표'},
 ]
 
 const homeroomAreas = [
@@ -168,6 +173,45 @@ const subjectActivities = [
 
           <div class="text-[15px] text-ink-4 pt-1 border-t border-line leading-[1.75]">
             각 Activity마다 학생별로 기록을 작성하면, 합산 문장이 <strong class="text-violet font-semibold">진로활동</strong> 항목으로 완성됩니다.
+          </div>
+        </div>
+
+        <!-- 인공지능기초 예시 -->
+        <div class="border-2 border-blue/35 rounded-modal bg-blue/[0.04] px-8 py-7 flex flex-col gap-5">
+          <div class="flex items-center gap-3.5">
+            <span class="text-sm font-bold tracking-[0.06em] text-blue bg-blue/[0.16] border border-blue/35 rounded-md px-3 py-1">Area</span>
+            <span class="text-[26px] font-extrabold text-ink">인공지능기초</span>
+            <span class="text-sm text-ink-4 ml-auto border border-line-2 rounded-md px-3 py-1">최대 1,500 byte</span>
+          </div>
+
+          <div class="text-[15px] text-ink-4 pb-1 border-b border-line">
+            아래 Activity들의 기록이 합쳐져 이 영역 하나를 구성합니다.
+          </div>
+
+          <div class="grid gap-3 grid-cards-200">
+            <div
+                v-for="act in aiActivities"
+                :key="act.name"
+                class="flex items-center gap-3.5 px-[18px] py-3.5 bg-surface border border-blue/25 rounded-xl transition-colors hover:border-blue/50"
+            >
+              <div class="w-2.5 h-2.5 rounded-full bg-blue flex-shrink-0 opacity-75"/>
+              <div class="min-w-0">
+                <div class="text-base font-semibold text-ink-2 whitespace-nowrap overflow-hidden text-ellipsis">{{ act.name }}</div>
+                <div class="text-sm text-ink-5 mt-[3px]">{{ act.desc }}</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3.5 px-[18px] py-3.5 bg-transparent border border-dashed border-line-2 rounded-xl">
+              <div class="w-2.5 text-center text-base text-ink-5 flex-shrink-0">＋</div>
+              <div class="min-w-0">
+                <div class="text-base font-semibold whitespace-nowrap overflow-hidden text-ellipsis text-ink-5">활동 더 추가 가능</div>
+                <div class="text-sm text-ink-5 mt-[3px]">원하는 만큼</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-[15px] text-ink-4 pt-1 border-t border-line leading-[1.75]">
+            각 Activity마다 학생별로 기록을 작성하면, 합산 문장이 <strong class="text-blue font-semibold">인공지능기초</strong> 항목으로 완성됩니다.
           </div>
         </div>
       </div>
