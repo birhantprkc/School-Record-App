@@ -626,7 +626,7 @@ function isNewGroup(students, index) {
                   :class="isStudentOverLimit(student.id) ? 'text-red font-bold' : (highlightEmpty && isStudentEmpty(student.id) ? 'text-amber' : 'text-ink-3')"
               >{{ studentTotalBytes(student.id) }} / {{ byteLimit }} Bytes</span>
               <button
-                  class="bg-transparent border-none p-0 text-[11px] text-blue-2/70 cursor-pointer leading-none hover:text-blue-2 hover:underline block mx-auto mt-0.5"
+                  class="bg-transparent border-none px-4 py-2 text-[11px] text-blue-2/70 cursor-pointer leading-none hover:text-blue-2 hover:underline block mx-auto"
                   @click.stop="copyStudentRecord(student.id)"
               >{{ copiedStudents.has(student.id) ? 'Copied!' : 'Copy' }}</button>
             </td>
