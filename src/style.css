@@ -237,7 +237,7 @@ code, pre {
 .grid-cards-200  { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .grid-detail-160 { grid-template-columns: 160px 1fr; }
 .grid-detail-140 { grid-template-columns: 140px 1fr; }
-.grid-duo-card   { grid-template-columns: repeat(auto-fit, minmax(max(300px, calc(50% - 8px)), 1fr)); }
+.grid-duo-card   { grid-template-columns: repeat(auto-fit, minmax(max(340px, calc(50% - 8px)), 1fr)); }
 .grid-mapper     { grid-template-columns: 1fr 32px 1fr; }
 .grid-replace    { grid-template-columns: 72px 1fr 36px 1fr 64px 76px; }
 

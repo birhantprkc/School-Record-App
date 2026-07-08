@@ -242,6 +242,70 @@ async function doExport() {
 
         <div class="grid gap-4 grid-duo-card">
 
+          <!-- C 타입 (전 너비, 추천) -->
+          <div
+              class="col-span-full border-2 rounded-xl p-5 cursor-pointer transition-[border-color,background-color] duration-200"
+              :class="exportType === 'C' ? 'border-blue/70 bg-blue/[0.06]' : 'border-line hover:border-blue/40 hover:bg-blue/[0.03]'"
+              @click="exportType = 'C'"
+          >
+            <div class="flex items-center gap-2.5 mb-2.5">
+              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-green bg-green/[0.12] border border-green/30 whitespace-nowrap">C 타입</span>
+              <span class="text-base font-semibold text-ink">최종 나이스(NEIS) 문장 형식 (추천)</span>
+            </div>
+            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">학생의 모든 활동 기록을 하나의 문장으로 결합해 내보냅니다.<br>
+              나이스(NEIS) 입력용 최종 문장 생성에 사용합니다.</p>
+            <div class="overflow-x-auto border border-line rounded-[6px]">
+              <table class="border-collapse w-full text-xs">
+                <thead>
+                <tr>
+                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
+                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">반</th>
+                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">번호</th>
+                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">이름</th>
+                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">영역명</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생A</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">지역 기관을 탐방... 회의에 적극 참여... 학교 행사 기획에 참여... 경기와 응원에 적극 참여...</td>
+                </tr>
+                <tr>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">2</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생B</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">다양한 종목에 참여...</td>
+                </tr>
+                <tr>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생C</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">도서를 바탕으로 자신의 생각... 실험 전 안전 점검을 철저히...</td>
+                </tr>
+                <tr>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">5</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생E</td>
+                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학급 행사 준비 과정에서...</td>
+                </tr>
+                <tr>
+                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">3</td>
+                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">1</td>
+                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">7</td>
+                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">학생G</td>
+                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">현장 경험을 통해 배운 내용을 바탕으로... 안전 수칙을 준수하며...</td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- A 타입 -->
           <div
               class="border-2 rounded-xl p-5 cursor-pointer transition-[border-color,background-color] duration-200"
@@ -249,7 +313,7 @@ async function doExport() {
               @click="exportType = 'A'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-red bg-red/[0.12] border border-red/35">A 타입</span>
+              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-red bg-red/[0.12] border border-red/35 whitespace-nowrap">A 타입</span>
               <span class="text-base font-semibold text-ink">행 단위 활동 형식</span>
             </div>
             <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
@@ -302,7 +366,7 @@ async function doExport() {
               @click="exportType = 'B'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-amber bg-amber/[0.15] border border-amber/40">B 타입</span>
+              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-amber bg-amber/[0.15] border border-amber/40 whitespace-nowrap">B 타입</span>
               <span class="text-base font-semibold text-ink">열 단위 활동 형식</span>
             </div>
             <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
@@ -342,70 +406,6 @@ async function doExport() {
                   <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">학생E</td>
                   <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap"></td>
                   <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">학급 행사 준비...</td>
-                </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- C 타입 (전 너비) -->
-          <div
-              class="col-span-full border-2 rounded-xl p-5 cursor-pointer transition-[border-color,background-color] duration-200"
-              :class="exportType === 'C' ? 'border-blue/70 bg-blue/[0.06]' : 'border-line hover:border-blue/40 hover:bg-blue/[0.03]'"
-              @click="exportType = 'C'"
-          >
-            <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-green bg-green/[0.12] border border-green/30">C 타입</span>
-              <span class="text-base font-semibold text-ink">최종 나이스(NEIS) 문장 형식 (추천)</span>
-            </div>
-            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">학생의 모든 활동 기록을 하나의 문장으로 결합해 내보냅니다.<br>
-              나이스(NEIS) 입력용 최종 문장 생성에 사용합니다.</p>
-            <div class="overflow-x-auto border border-line rounded-[6px]">
-              <table class="border-collapse w-full text-xs">
-                <thead>
-                <tr>
-                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
-                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">반</th>
-                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">번호</th>
-                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">이름</th>
-                  <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">영역명</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생A</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">지역 기관을 탐방... 회의에 적극 참여... 학교 행사 기획에 참여... 경기와 응원에 적극 참여...</td>
-                </tr>
-                <tr>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">2</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생B</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">다양한 종목에 참여...</td>
-                </tr>
-                <tr>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생C</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">도서를 바탕으로 자신의 생각... 실험 전 안전 점검을 철저히...</td>
-                </tr>
-                <tr>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">3</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">1</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">5</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학생E</td>
-                  <td class="py-[5px] px-2 text-ink-3 border-b border-line/50 whitespace-nowrap">학급 행사 준비 과정에서...</td>
-                </tr>
-                <tr>
-                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">3</td>
-                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">1</td>
-                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">7</td>
-                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">학생G</td>
-                  <td class="py-[5px] px-2 text-ink-3 whitespace-nowrap">현장 경험을 통해 배운 내용을 바탕으로... 안전 수칙을 준수하며...</td>
                 </tr>
                 </tbody>
               </table>
