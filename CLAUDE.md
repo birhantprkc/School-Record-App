@@ -13,6 +13,7 @@
 ## CONVENTIONS
 - Rust commands: snake_case
 - MUST handle errors explicitly
+- Font size: `text-base` minimum. `text-sm` / `text-xs` only for exceptions (table cell preview, badge, caption) with explicit justification.
 
 ## PROHIBITED
 - Silent failures

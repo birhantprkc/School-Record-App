@@ -4,6 +4,7 @@ import {save} from '@tauri-apps/plugin-dialog'
 import {useAreaStore} from '../stores/area.js'
 import {useRecordStore} from '../stores/record.js'
 import {useFileStore} from '../stores/file.js'
+import {useConfigStore} from '../stores/configStore.js'
 import {revealItemInDir} from '@tauri-apps/plugin-opener'
 import {Workbook} from 'exceljs'
 import WizardLayout from '../components/WizardLayout.vue'
@@ -13,6 +14,7 @@ import WizardLayout from '../components/WizardLayout.vue'
 const areaStore = useAreaStore()
 const recordStore = useRecordStore()
 const fileStore = useFileStore()
+const configStore = useConfigStore()
 
 // ── 상태 ──────────────────────────────────────────────────────
 
@@ -155,7 +157,7 @@ async function doExport() {
         [areaCol]: activities
             .map(a => normalizeContent(records.find(r => r.student_id === s.id && r.activity_id === a.id)?.content ?? ''))
             .filter(c => c !== '')
-            .join(' '),
+            .join(configStore.exportCSeparator),
       }))
     }
 
@@ -251,6 +253,18 @@ async function doExport() {
             <div class="flex items-center gap-2.5 mb-2.5">
               <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-green bg-green/[0.12] border border-green/30 whitespace-nowrap">C 타입</span>
               <span class="text-base font-semibold text-ink">최종 나이스(NEIS) 문장 형식 (추천)</span>
+            </div>
+            <div class="flex items-center gap-3 mb-2.5" @click.stop>
+              <span class="text-base text-ink-4 whitespace-nowrap">활동 구분</span>
+              <select
+                  class="text-base text-ink-2 bg-base border border-line rounded-md px-2 py-1 cursor-pointer hover:border-blue/50 focus:outline-none focus:border-blue/60"
+                  :value="configStore.exportCSeparatorKey"
+                  @change="configStore.setExportCSeparator($event.target.value)"
+              >
+                <option value="space">공백</option>
+                <option value="newline">줄바꿈 (↵)</option>
+                <option value="double_newline">빈 줄 (↵↵)</option>
+              </select>
             </div>
             <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">학생의 모든 활동 기록을 하나의 문장으로 결합해 내보냅니다.<br>
               나이스(NEIS) 입력용 최종 문장 생성에 사용합니다.</p>
