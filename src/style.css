@@ -172,6 +172,33 @@ code, pre {
   color: var(--c-ink-3);
 }
 
+/* ── QuickReplaceModal ────────────────────────────── */
+.quick-replace-body       { @apply flex flex-col overflow-hidden flex-1 min-h-0; }
+.quick-replace-inputs     { @apply flex items-end gap-3 px-6 py-5 border-b border-line shrink-0; }
+.quick-replace-field      { @apply flex flex-col gap-1.5 flex-1; }
+.quick-replace-label      { @apply text-base font-medium text-ink-2; }
+.quick-replace-input      { @apply w-full px-3 py-2.5 rounded-lg border border-line bg-surface text-base text-ink outline-none transition-colors; }
+.quick-replace-input:focus { border-color: var(--c-blue); }
+.quick-replace-arrow      { @apply text-ink-3 shrink-0 mb-3; }
+.quick-replace-search-btn {
+  @apply inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg border border-blue/50 bg-blue/[0.08];
+  @apply text-base font-semibold text-blue-2 cursor-pointer transition-colors shrink-0 self-end;
+}
+.quick-replace-search-btn:hover:not(:disabled) { @apply bg-blue/[0.15]; }
+.quick-replace-search-btn:disabled { @apply opacity-40 cursor-not-allowed; }
+.quick-replace-preview    { @apply flex-1 overflow-y-auto min-h-0 px-6 py-4; }
+.quick-replace-empty      { @apply flex flex-col items-center justify-center gap-3 py-12 text-ink-3; }
+.quick-replace-empty-icon { @apply opacity-30; }
+.quick-replace-empty p    { @apply text-base m-0; }
+.quick-replace-count      { @apply text-base font-medium text-ink-3 mb-3; }
+.quick-replace-list       { @apply flex flex-col gap-3; }
+.quick-replace-item       { @apply flex flex-col gap-1.5 p-4 rounded-xl border border-line bg-surface; }
+.quick-replace-item-meta  { @apply flex items-center gap-1.5 text-base; }
+.quick-replace-item-student  { @apply font-semibold text-ink-2; }
+.quick-replace-item-sep      { @apply text-ink-3; }
+.quick-replace-item-activity { @apply text-ink-3; }
+.quick-replace-error      { @apply text-base text-red px-6 pb-3 shrink-0; }
+
 /* ── Buttons ──────────────────────────────────────── */
 .btn-primary {
   @apply inline-flex items-center gap-1.5 px-6 py-2.5 border-none bg-blue text-white;

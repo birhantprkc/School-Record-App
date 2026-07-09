@@ -1,10 +1,11 @@
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import {ALargeSmall, ArrowLeftRight, ArrowUpDown, Circle, CircleAlert, ChevronsRight, Eye, EyeOff, Maximize2, Minimize2, Moon, Pin, PinOff, Sun} from 'lucide-vue-next'
+import {ALargeSmall, ArrowLeftRight, ArrowUpDown, Circle, CircleAlert, ChevronsRight, Eye, EyeOff, Maximize2, Minimize2, Moon, Pin, PinOff, Search, Sun} from 'lucide-vue-next'
 import {useAreaStore} from '../stores/area'
 import {useRecordStore} from '../stores/record'
 import {useConfigStore} from '../stores/configStore'
 import CellHistoryModal from '../components/CellHistoryModal.vue'
+import QuickReplaceModal from '../components/QuickReplaceModal.vue'
 
 const areaStore = useAreaStore()
 const recordStore = useRecordStore()
@@ -47,6 +48,7 @@ async function toggleActivity(actId) {
 const savingState = ref(new Map())
 const cellContent = reactive(new Map())
 const debounceTimers = new Map()
+const showQuickReplace = ref(false)
 
 onMounted(async () => {
   await areaStore.fetchAreas()
@@ -59,6 +61,20 @@ function clearAllTimers() {
 
 onBeforeUnmount(clearAllTimers)
 
+async function reloadGrid(id) {
+  await recordStore.fetchAreaGrid(id)
+  if (selectedAreaId.value !== id) return
+  cellContent.clear()
+  for (const r of recordStore.gridData.records) {
+    cellContent.set(cellKey(r.activity_id, r.student_id), r.content)
+  }
+  savingState.value = new Map()
+  if (!compactCell.value) {
+    await nextTick()
+    syncAllRows()
+  }
+}
+
 watch(selectedAreaId, async (id) => {
   clearAllTimers()
   loadError.value = ''
@@ -67,23 +83,41 @@ watch(selectedAreaId, async (id) => {
     return
   }
   try {
-    await recordStore.fetchAreaGrid(id)
+    await reloadGrid(id)
     if (selectedAreaId.value !== id) return
-    cellContent.clear()
-    for (const r of recordStore.gridData.records) {
-      cellContent.set(cellKey(r.activity_id, r.student_id), r.content)
-    }
-    savingState.value = new Map()
     collapsedActivities.value = new Set()
-    if (!compactCell.value) {
-      await nextTick()
-      syncAllRows()
-    }
   } catch (e) {
     if (selectedAreaId.value !== id) return
     loadError.value = String(e)
   }
 })
+
+// 디바운스 대기 중인 셀을 즉시 DB에 저장한다.
+// QuickReplace는 DB를 직접 읽어 교체하므로, 실행 전에 미저장 내용을 먼저 반영해야 한다.
+async function flushPendingDebounces() {
+  if (debounceTimers.size === 0) return
+  const saves = []
+  for (const [key, timerId] of debounceTimers) {
+    clearTimeout(timerId)
+    const [actId, stuId] = key.split('-').map(Number)
+    saves.push(recordStore.upsertRecord(actId, stuId, cellContent.get(key) ?? ''))
+  }
+  // clear는 await 성공 후에 실행 — 실패 시 재시도에서 다시 flush 가능하도록
+  await Promise.all(saves)
+  debounceTimers.clear()
+}
+
+async function handleQuickReplaceDone() {
+  showQuickReplace.value = false
+  const id = selectedAreaId.value
+  if (!id) return
+  try {
+    await reloadGrid(id)
+  } catch (e) {
+    if (selectedAreaId.value !== id) return
+    loadError.value = String(e)
+  }
+}
 
 function truncateName(name, max = 10) {
   return name.length > max ? name.slice(0, max) + '…' : name
@@ -458,6 +492,15 @@ function isNewGroup(students, index) {
           </button>
 
           <button
+              class="flex items-center justify-center py-2.5 px-3.5 rounded-lg border bg-transparent cursor-pointer transition-[background-color,color,border-color] text-ink-3 border-line hover:bg-line hover:text-ink-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              :disabled="!selectedAreaId || !recordStore.gridData"
+              title="빠른 텍스트 교체"
+              @click="showQuickReplace = true"
+          >
+            <Search :size="15"/>
+          </button>
+
+          <button
               class="flex items-center justify-center py-2.5 px-3.5 rounded-lg border bg-transparent cursor-pointer transition-[background-color,color,border-color] text-ink-3 border-line hover:bg-line hover:text-ink-2"
               :title="configStore.theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'"
               @click="configStore.setTheme(configStore.theme === 'dark' ? 'light' : 'dark')"
@@ -682,6 +725,17 @@ function isNewGroup(students, index) {
         :student-name="historyModal.studentName"
         :current-content="historyModal.currentContent"
         @close="historyModal = null"
+    />
+
+    <!-- 빠른 텍스트 교체 모달 -->
+    <QuickReplaceModal
+        v-if="showQuickReplace && selectedAreaId && recordStore.gridData"
+        :area-id="selectedAreaId"
+        :grid-data="recordStore.gridData"
+        :cell-content="cellContent"
+        :flush-pending="flushPendingDebounces"
+        @close="showQuickReplace = false"
+        @done="handleQuickReplaceDone"
     />
   </div>
 </template>

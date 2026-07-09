@@ -56,5 +56,9 @@ export const useRecordStore = defineStore('record', () => {
         }
     }
 
-    return {gridData, loading, error, fetchAreaGrid, upsertRecord, fetchRecordHistory, saveHistorySnapshot, previewImportRecords, bulkImportRecords}
+    async function bulkQuickReplace(areaId, searchText, replaceWith) {
+        return await invoke('bulk_quick_replace', {areaId, searchText, replaceWith})
+    }
+
+    return {gridData, loading, error, fetchAreaGrid, upsertRecord, fetchRecordHistory, saveHistorySnapshot, previewImportRecords, bulkImportRecords, bulkQuickReplace}
 })

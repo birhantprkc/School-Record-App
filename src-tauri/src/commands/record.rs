@@ -523,3 +523,79 @@ pub fn preview_import_records(
     let key = resolve_data_key(conn, &crypto)?;
     preview_import_records_impl(conn, &records, key)
 }
+
+pub fn bulk_quick_replace_impl(
+    conn: &Connection,
+    area_id: i64,
+    search_text: &str,
+    replace_with: &str,
+    key: Option<[u8; 32]>,
+) -> Result<i64, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT r.activity_id, r.student_id, r.content
+             FROM ActivityRecord r
+             JOIN AreaActivity  aa  ON aa.activity_id  = r.activity_id
+             JOIN AreaStudent   as_ ON as_.student_id  = r.student_id
+                                   AND as_.area_id     = aa.area_id
+             WHERE aa.area_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows: Vec<(i64, i64, String)> = stmt
+        .query_map(rusqlite::params![area_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut changed = 0i64;
+    for (activity_id, student_id, raw_content) in rows {
+        let content = maybe_decrypt(raw_content, key)?;
+        if content.contains(search_text) {
+            save_snapshot_internal(conn, activity_id, student_id, Some("빠른 텍스트 교체"))?;
+            let new_content = content.replace(search_text, replace_with);
+            upsert_record_impl(conn, activity_id, student_id, &new_content, key)?;
+            changed += 1;
+        }
+    }
+    Ok(changed)
+}
+
+#[tauri::command]
+pub fn bulk_quick_replace(
+    area_id: i64,
+    search_text: String,
+    replace_with: String,
+    state: State<DbState>,
+    crypto: State<CryptoStateHandle>,
+) -> Result<i64, String> {
+    if search_text.trim().is_empty() {
+        return Err("찾을 텍스트가 비어 있습니다.".to_string());
+    }
+    let guard = state.0.lock().unwrap();
+    let conn = guard
+        .as_ref()
+        .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
+    let key = resolve_data_key(conn, &crypto)?;
+
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    match bulk_quick_replace_impl(conn, area_id, &search_text, &replace_with, key) {
+        Ok(count) => {
+            if let Err(e) = conn.execute_batch("COMMIT") {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e.to_string());
+            }
+            Ok(count)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
