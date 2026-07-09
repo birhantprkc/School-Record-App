@@ -142,14 +142,14 @@ async function saveManualSnapshot() {
                 @keydown.esc.stop="showNoteForm = false"
             />
             <button
-                class="py-[7px] px-3.5 rounded-lg border-none bg-blue/70 text-ink text-sm cursor-pointer disabled:opacity-40 disabled:cursor-default enabled:hover:bg-blue/90"
+                class="btn-primary"
                 :disabled="!noteInput.trim() || saving"
                 @click="saveManualSnapshot"
             >
               {{ saving ? '저장 중...' : '저장' }}
             </button>
             <button
-                class="py-[7px] px-3 rounded-lg border border-line bg-transparent text-ink-2 text-sm cursor-pointer hover:bg-line"
+                class="btn-secondary"
                 @click="showNoteForm = false; noteInput = ''"
             >취소</button>
           </div>
