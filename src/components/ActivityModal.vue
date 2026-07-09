@@ -79,10 +79,10 @@ function handleDelete() {
       @close="emit('close')"
   >
     <!-- 2단 바디 -->
-    <div class="flex items-stretch pt-5 pb-1 min-h-[380px]">
+    <div class="flex items-stretch pt-5 pb-1 min-h-[55vh]">
 
       <!-- 좌측: 기본 정보 -->
-      <div class="flex flex-col gap-4 flex-1 px-6 pb-4">
+      <div class="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto px-6 pb-4">
         <p class="text-base font-semibold text-ink-5 tracking-[0.06em] uppercase m-0">기본 정보</p>
 
         <div class="flex flex-col gap-1.5">
