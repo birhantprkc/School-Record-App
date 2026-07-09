@@ -28,17 +28,36 @@
         <p class="text-lg text-slate-600 leading-relaxed mb-4">
             좌측 메뉴 하단의 <strong>설정(Settings)</strong> 탭에서 프로그램 동작을 조정할 수 있습니다.
         </p>
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 print-keep-bg">
-            <ul class="space-y-3 text-slate-600 text-base leading-relaxed">
-                <li>
-                    <strong class="text-slate-700">테마 설정:</strong>
-                    다크 모드와 라이트 모드를 전환합니다. 생기부 작성 탭 우측 상단 버튼에서도 동일하게 변경할 수 있습니다.
-                </li>
-                <li>
-                    <strong class="text-slate-700">암호화 설정:</strong>
-                    DB 파일 암호화를 활성화하거나 비밀번호를 변경합니다. 변경 시 즉시 적용됩니다.
-                </li>
-            </ul>
+        <div class="overflow-x-auto">
+            <table class="w-full text-base border-collapse">
+                <thead>
+                    <tr class="bg-slate-100 print-keep-bg">
+                        <th class="border border-slate-300 px-4 py-2 text-left font-bold text-slate-700">설정 항목</th>
+                        <th class="border border-slate-300 px-4 py-2 text-left font-bold text-slate-700">설명</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="border border-slate-300 px-4 py-2 font-semibold text-slate-700">테마</td>
+                        <td class="border border-slate-300 px-4 py-2 text-slate-600">다크 모드와 라이트 모드를 전환합니다. 생기부 작성 탭 우측 상단 버튼에서도 동일하게 변경할 수 있습니다.</td>
+                    </tr>
+                    <tr class="bg-slate-50 print-keep-bg">
+                        <td class="border border-slate-300 px-4 py-2 font-semibold text-slate-700">내보내기 옵션<br><span class="text-slate-400 font-normal text-sm">C타입 활동 구분자</span></td>
+                        <td class="border border-slate-300 px-4 py-2 text-slate-600">
+                            내보내기 C타입 및 생기부 작성 탭의 <strong>바이트 열 Copy</strong> 버튼으로 전체 기록을 복사할 때, 활동 내용 사이에 삽입할 구분 문자를 선택합니다.
+                            <div class="mt-2 space-y-1">
+                                <div>• <strong>공백</strong>: 활동 사이에 공백 1개 삽입 (기본값)</div>
+                                <div>• <strong>줄바꿈 (↵)</strong>: 활동마다 줄바꿈으로 구분</div>
+                                <div>• <strong>빈 줄 (↵↵)</strong>: 활동 사이에 빈 줄 하나 삽입</div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="border border-slate-300 px-4 py-2 font-semibold text-slate-700">데이터 암호화</td>
+                        <td class="border border-slate-300 px-4 py-2 text-slate-600">DB 파일 암호화를 활성화하거나 비밀번호를 변경합니다. 변경 시 즉시 적용됩니다.</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -128,10 +147,10 @@
 
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-5 print-keep-bg">
                 <p class="font-bold text-slate-700 text-base mb-2">Q. 한셀(HanCell)로 저장한 엑셀 파일을 불러오면 오류가 발생합니다.</p>
-                <p class="text-slate-600 text-base leading-relaxed">
+                <p class="text-slate-600 text-base leading-relaxed mb-2">
                     이 프로그램은 <strong>Microsoft Excel</strong>에 최적화되어 있습니다.
-                    한셀로 저장한 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono text-base print-keep-bg">.xlsx</code> 파일은 정상적으로 읽히지 않을 수 있습니다.
-                    한셀을 사용 중이라면 파일을 열고 <strong>파일 → 다른 이름으로 저장</strong>에서 파일 형식을
+                    한셀로 저장한 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono text-base print-keep-bg">.xlsx</code> 파일을 불러올 때 오류가 발생하면 자동으로 대체 방식으로 재시도합니다.
+                    재시도로도 읽히지 않는 경우, 파일을 열고 <strong>파일 → 다른 이름으로 저장</strong>에서 파일 형식을
                     <strong>CSV UTF-8</strong>로 선택하여 저장한 뒤, 프로그램에서 해당 <code class="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono text-base print-keep-bg">.csv</code> 파일을 불러오시기 바랍니다.
                 </p>
             </div>
