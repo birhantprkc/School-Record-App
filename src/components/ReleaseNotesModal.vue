@@ -25,7 +25,7 @@ useEscapeKey(() => emit('close'))
         </div>
       </div>
 
-      <div v-if="notes.length" class="notes-body flex flex-col gap-4 mb-6 max-h-[300px] overflow-y-auto pr-1">
+      <div v-if="notes.length" class="notes-body flex flex-col gap-4 mb-6 max-h-[40vh] overflow-y-auto pr-1">
         <template v-for="(note, index) in notes" :key="note.version">
           <div class="text-lg font-semibold text-ink-3 pb-0.5">
             v{{ note.version }}

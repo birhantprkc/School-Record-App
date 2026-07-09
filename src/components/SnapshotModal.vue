@@ -78,7 +78,7 @@ onMounted(loadSnapshots)
 
 <template>
   <div class="fixed inset-0 bg-overlay backdrop-blur-[6px] flex items-center justify-center z-[1000]">
-    <div class="bg-surface border border-line rounded-[14px] w-[780px] h-[560px] max-w-[95vw] max-h-[80vh] flex flex-col overflow-hidden">
+    <div class="bg-surface border border-line rounded-[14px] w-[780px] h-[80vh] max-w-[95vw] flex flex-col overflow-hidden">
 
       <!-- 헤더 -->
       <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-line shrink-0">
