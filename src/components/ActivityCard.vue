@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed} from 'vue'
 
 const props = defineProps({
@@ -36,6 +36,7 @@ const recordCountEmpty = computed(() => (props.activity.record_count ?? 0) === 0
     @click="emit('edit', activity)"
   >
     <div class="flex flex-col gap-2 flex-1">
+      <!-- badge: 영역 배정 상태 뱃지 -->
       <span
         class="self-start text-sm font-semibold rounded px-[9px] py-0.5 whitespace-nowrap border"
         :class="areaBadgeClass"
@@ -44,10 +45,10 @@ const recordCountEmpty = computed(() => (props.activity.record_count ?? 0) === 0
     </div>
     <div class="flex items-center justify-between pt-[10px] border-t border-line">
       <span
-        class="text-sm font-medium"
+        class="text-base font-medium"
         :class="recordCountEmpty ? 'text-ink-5' : 'text-ink-3'"
       >{{ recordCountText }}</span>
-      <span class="text-sm text-transparent transition-colors duration-150 group-hover:text-ink-5">편집</span>
+      <span class="text-base text-transparent transition-colors duration-150 group-hover:text-ink-5">편집</span>
     </div>
   </div>
 </template>

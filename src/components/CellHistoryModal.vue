@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, watch } from 'vue'
 import { useRecordStore } from '../stores/record.js'
 import { X } from 'lucide-vue-next'
@@ -127,7 +127,7 @@ async function saveManualSnapshot() {
       <div class="px-6 py-3 border-b border-line shrink-0">
         <template v-if="!showNoteForm">
           <button
-              class="py-[7px] px-4 rounded-lg border border-blue/40 bg-blue/[12%] text-blue-2 text-sm cursor-pointer hover:bg-blue/[22%]"
+              class="py-[7px] px-4 rounded-lg border border-blue/40 bg-blue/[12%] text-blue-2 text-base cursor-pointer hover:bg-blue/[22%]"
               @click="showNoteForm = true"
           >현재 버전 저장</button>
         </template>
@@ -135,7 +135,7 @@ async function saveManualSnapshot() {
           <div class="flex gap-2 items-center">
             <input
                 v-model="noteInput"
-                class="ui-input flex-1 w-auto py-[7px] px-3 rounded-lg text-sm border-line-2 placeholder:text-ink-5"
+                class="ui-input flex-1 w-auto py-[7px] px-3 rounded-lg text-base border-line-2 placeholder:text-ink-5"
                 placeholder="메모를 입력하세요 (필수)"
                 maxlength="100"
                 @keydown.enter="saveManualSnapshot"
@@ -153,21 +153,21 @@ async function saveManualSnapshot() {
                 @click="showNoteForm = false; noteInput = ''"
             >취소</button>
           </div>
-          <p v-if="saveError" class="text-sm text-red bg-red/[8%] border border-red/20 rounded-lg px-3 py-2 mt-1 m-0">{{ saveError }}</p>
+          <p v-if="saveError" class="text-base text-red bg-red/[8%] border border-red/20 rounded-lg px-3 py-2 mt-1 m-0">{{ saveError }}</p>
         </template>
       </div>
 
       <!-- 뷰 모드 토글 -->
       <div class="flex gap-1.5 px-6 py-2.5 border-b border-line shrink-0">
         <button
-            class="py-[5px] px-3.5 rounded-[7px] border text-xs cursor-pointer transition-colors"
+            class="py-[5px] px-3.5 rounded-[7px] border text-base cursor-pointer transition-colors"
             :class="viewMode === 'content'
               ? 'bg-blue/[18%] border-blue/50 text-blue-2'
               : 'border-line bg-transparent text-ink-5 hover:bg-line hover:text-ink-3'"
             @click="viewMode = 'content'"
         >원문 보기</button>
         <button
-            class="py-[5px] px-3.5 rounded-[7px] border text-xs cursor-pointer transition-colors"
+            class="py-[5px] px-3.5 rounded-[7px] border text-base cursor-pointer transition-colors"
             :class="viewMode === 'diff'
               ? 'bg-blue/[18%] border-blue/50 text-blue-2'
               : 'border-line bg-transparent text-ink-5 hover:bg-line hover:text-ink-3'"
@@ -177,23 +177,23 @@ async function saveManualSnapshot() {
 
       <!-- 히스토리 목록 -->
       <div class="overflow-y-auto px-6 py-4 flex-1 min-h-0 flex flex-col gap-3">
-        <p v-if="historyError" class="text-sm text-red bg-red/[8%] border border-red/20 rounded-lg px-3 py-2 m-0">{{ historyError }}</p>
+        <p v-if="historyError" class="text-base text-red bg-red/[8%] border border-red/20 rounded-lg px-3 py-2 m-0">{{ historyError }}</p>
 
         <!-- 현재 버전 -->
         <div class="border-2 border-green/50 rounded-btn overflow-hidden shrink-0">
           <div class="flex items-center gap-2 px-3.5 py-2 bg-green/[0.08] border-b border-green/30">
             <span class="text-green text-[10px]">●</span>
-            <span class="text-xs font-semibold text-green">현재</span>
+            <!-- badge: 현재 버전 상태 뱃지 --><span class="text-xs font-semibold text-green">현재</span>
             <span class="text-[11px] text-green/70 bg-green/[0.12] px-[7px] py-px rounded-[4px]">편집 중인 내용</span>
           </div>
           <div class="px-3.5 py-2.5 bg-green/[0.04]">
             <DiffView v-if="viewMode === 'diff'" :before="entries[0]?.content ?? ''" :after="currentContent" />
-            <span v-else class="text-sm leading-relaxed whitespace-pre-wrap break-all text-ink-2">{{ currentContent || '(내용 없음)' }}</span>
+            <span v-else class="text-base leading-relaxed whitespace-pre-wrap break-all text-ink-2">{{ currentContent || '(내용 없음)' }}</span>
           </div>
         </div>
 
         <div v-if="entries.length === 0 && !loading && !historyError"
-             class="text-sm text-ink-5 text-center py-6">
+             class="text-base text-ink-5 text-center py-6">
           저장된 히스토리가 없습니다.
         </div>
 
@@ -201,21 +201,21 @@ async function saveManualSnapshot() {
              class="border border-line rounded-btn overflow-hidden shrink-0">
           <div class="flex items-center gap-2 px-3.5 py-2 bg-base border-b border-line">
             <span class="text-blue text-[10px]">●</span>
-            <span class="text-xs text-blue-2">{{ formatDate(entry.changed_at) }}</span>
-            <span v-if="entry.note" class="text-xs text-amber">📌 {{ entry.note }}</span>
+            <!-- caption: 히스토리 날짜 --><span class="text-xs text-blue-2">{{ formatDate(entry.changed_at) }}</span>
+            <!-- caption: 메모 텍스트 --><span v-if="entry.note" class="text-xs text-amber">📌 {{ entry.note }}</span>
             <span v-else class="text-[11px] text-ink-5 bg-line px-[7px] py-px rounded-[4px]">자동</span>
           </div>
           <div class="px-3.5 py-2.5 bg-base">
             <DiffView v-if="viewMode === 'diff'" :before="prevContent(idx)" :after="entry.content" />
-            <span v-else class="text-sm leading-relaxed whitespace-pre-wrap break-all text-ink-2">{{ entry.content }}</span>
+            <span v-else class="text-base leading-relaxed whitespace-pre-wrap break-all text-ink-2">{{ entry.content }}</span>
           </div>
         </div>
 
-        <div v-if="loading" class="text-sm text-ink-5 text-center py-6">불러오는 중...</div>
+        <div v-if="loading" class="text-base text-ink-5 text-center py-6">불러오는 중...</div>
 
         <button
             v-if="hasMore && !loading"
-            class="self-center py-[7px] px-5 rounded-lg border border-line bg-transparent text-blue-2 text-sm cursor-pointer mt-1 hover:bg-line"
+            class="self-center py-[7px] px-5 rounded-lg border border-line bg-transparent text-blue-2 text-base cursor-pointer mt-1 hover:bg-line"
             @click="loadHistory(false)"
         >{{ LIMIT }}개 더 불러오기</button>
       </div>

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { useSlots } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
@@ -23,7 +23,7 @@ useEscapeKey(() => emit('close'))
         <div class="modal-container" :style="{ maxWidth, maxHeight }">
           <div class="modal-hdr" :class="{ 'modal-hdr--top': label }">
             <div v-if="label" class="flex flex-col gap-0.5">
-              <span class="text-sm font-medium text-ink-3">{{ label }}</span>
+              <span class="text-base font-medium text-ink-3">{{ label }}</span>
               <h2 class="modal-title">{{ title }}</h2>
             </div>
             <h2 v-else class="modal-title">{{ title }}</h2>

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, ref, watch} from 'vue'
 import {AlertTriangle, Info, Trash2} from 'lucide-vue-next'
 import BaseModal from './BaseModal.vue'
@@ -83,7 +83,7 @@ function handleDelete() {
 
       <!-- 좌측: 기본 정보 -->
       <div class="flex flex-col gap-4 flex-1 px-6 pb-4">
-        <p class="text-sm font-semibold text-ink-5 tracking-[0.06em] uppercase m-0">기본 정보</p>
+        <p class="text-base font-semibold text-ink-5 tracking-[0.06em] uppercase m-0">기본 정보</p>
 
         <div class="flex flex-col gap-1.5">
           <label class="text-base font-semibold text-ink-3">활동 이름 <span class="text-red">*</span></label>
@@ -120,8 +120,8 @@ function handleDelete() {
       <!-- 우측: 영역 선택 -->
       <div class="flex flex-col flex-1 px-6 pb-4 gap-4">
         <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-ink-5 tracking-[0.06em] uppercase m-0">포함할 영역</p>
-          <span v-if="allAreas.length > 0" class="text-sm text-ink-5">
+          <p class="text-base font-semibold text-ink-5 tracking-[0.06em] uppercase m-0">포함할 영역</p>
+          <span v-if="allAreas.length > 0" class="text-base text-ink-5">
             {{ selectedAreaIds.size }}개 선택
           </span>
         </div>

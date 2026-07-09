@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, ref} from 'vue'
 import {AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X} from 'lucide-vue-next'
 import {useEscapeKey} from '../composables/useEscapeKey.js'
@@ -333,7 +333,7 @@ async function doImport() {
             <p>파일 내에 '학년, 반, 번호, 이름' 열이 포함되어 있는지 확인해 주세요.</p>
           </div>
           <button
-              class="flex items-center gap-1.5 py-[7px] px-3 rounded-lg border border-blue/30 bg-blue/8 text-ink-3 text-sm cursor-pointer whitespace-nowrap transition-colors duration-150 shrink-0 hover:bg-blue/15"
+              class="flex items-center gap-1.5 py-[7px] px-3 rounded-lg border border-blue/30 bg-blue/8 text-ink-3 text-base cursor-pointer whitespace-nowrap transition-colors duration-150 shrink-0 hover:bg-blue/15"
               @click="downloadSample"
           >
             <Download :size="14"/>
@@ -355,7 +355,7 @@ async function doImport() {
           <p class="text-base text-ink-3 m-0">
             파일을 여기에 드래그하거나 <span class="text-ink-2 underline">파일 선택</span>
           </p>
-          <p class="text-sm text-ink-5 m-0">CSV, XLSX 지원</p>
+          <p class="text-base text-ink-5 m-0">CSV, XLSX 지원</p>
         </div>
 
         <!-- 파일 선택됨: 2단 레이아웃 -->
@@ -365,16 +365,16 @@ async function doImport() {
           <div class="w-[300px] shrink-0">
             <div class="h-full bg-blue/5 border border-blue/20 rounded-xl py-4 px-[18px] flex flex-col gap-3">
               <div class="flex items-center justify-between">
-                <p class="text-sm font-semibold text-ink-3 m-0 tracking-[0.04em] uppercase">열 매핑 확인</p>
+                <p class="text-base font-semibold text-ink-3 m-0 tracking-[0.04em] uppercase">열 매핑 확인</p>
                 <button
-                    class="flex items-center gap-1 py-[5px] px-2.5 rounded-[7px] border border-blue/30 bg-blue/8 text-ink-3 text-sm cursor-pointer whitespace-nowrap transition-colors duration-150 hover:bg-blue/15"
+                    class="flex items-center gap-1 py-[5px] px-2.5 rounded-[7px] border border-blue/30 bg-blue/8 text-ink-3 text-base cursor-pointer whitespace-nowrap transition-colors duration-150 hover:bg-blue/15"
                     @click="resetFile();"
                 >
                   <FileSpreadsheet :size="13"/>
                   파일 초기화
                 </button>
               </div>
-              <p class="text-sm text-ink-4 -mt-1.5 truncate m-0">📄 {{ fileName }}</p>
+              <p class="text-base text-ink-4 -mt-1.5 truncate m-0">📄 {{ fileName }}</p>
               <div class="flex flex-col gap-2">
                 <div
                     v-for="(label, field) in FIELD_LABELS"
@@ -383,7 +383,7 @@ async function doImport() {
                 >
                   <span class="text-base font-semibold text-ink-2 w-9 shrink-0">{{ label }}</span>
                   <select
-                      class="flex-1 min-w-0 py-1.5 px-2 rounded-lg border bg-base text-ink text-sm outline-none cursor-pointer transition-colors duration-150 focus:border-blue/50"
+                      class="flex-1 min-w-0 py-1.5 px-2 rounded-lg border bg-base text-ink text-base outline-none cursor-pointer transition-colors duration-150 focus:border-blue/50"
                       :class="colMap[field] === null ? 'border-amber/30' : 'border-green/30'"
                       :value="colMap[field] ?? ''"
                       @change="colMap[field] = $event.target.value === '' ? null : Number($event.target.value)"
@@ -412,8 +412,8 @@ async function doImport() {
           <!-- 우: 실시간 미리보기 -->
           <div class="flex-1 min-w-0">
             <div class="h-full bg-blue/5 border border-blue/20 rounded-xl py-4 px-[18px] flex flex-col gap-3">
-              <p class="text-sm font-semibold text-ink-3 m-0 tracking-[0.04em] uppercase">미리보기</p>
-              <p class="text-sm text-ink-4 -mt-1.5 m-0">
+              <p class="text-base font-semibold text-ink-3 m-0 tracking-[0.04em] uppercase">미리보기</p>
+              <p class="text-base text-ink-4 -mt-1.5 m-0">
                 <template v-if="allMapped">
                   총 {{ parsedRows.length }}행
                   <span v-if="errorRows.length > 0" class="text-red">(오류 {{ errorRows.length }}행 제외)</span>
@@ -423,6 +423,7 @@ async function doImport() {
               <div class="border border-line rounded-[10px] overflow-hidden">
                 <table class="w-full border-collapse [&_tr:last-child_td]:border-b-0">
                   <thead>
+                  <!-- table header: 학생 데이터 미리보기 -->
                   <tr>
                     <th class="text-xs font-semibold text-ink-4 py-2 px-2.5 bg-base border-b border-line text-left tracking-[0.04em] uppercase">행</th>
                     <th class="text-xs font-semibold text-ink-4 py-2 px-2.5 bg-base border-b border-line text-left tracking-[0.04em] uppercase">학년</th>
@@ -433,11 +434,11 @@ async function doImport() {
                   </thead>
                   <tbody>
                   <tr v-for="row in livePreviewRows" :key="row._row">
-                    <td class="text-sm text-ink-4 py-[7px] px-2.5 border-b border-line/60">{{ row._row }}</td>
-                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.grade === null ? 'text-ink-4' : 'text-ink-2'">{{ row.grade ?? '—' }}</td>
-                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.classNum === null ? 'text-ink-4' : 'text-ink-2'">{{ row.classNum ?? '—' }}</td>
-                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.number === null ? 'text-ink-4' : 'text-ink-2'">{{ row.number ?? '—' }}</td>
-                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.name === null ? 'text-ink-4' : 'text-ink-2'">{{ row.name ?? '—' }}</td>
+                    <td class="text-sm text-ink-4 py-[7px] px-2.5 border-b border-line/60">{{ row._row }}</td><!-- table cell preview -->
+                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.grade === null ? 'text-ink-4' : 'text-ink-2'">{{ row.grade ?? '—' }}</td><!-- table cell preview -->
+                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.classNum === null ? 'text-ink-4' : 'text-ink-2'">{{ row.classNum ?? '—' }}</td><!-- table cell preview -->
+                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.number === null ? 'text-ink-4' : 'text-ink-2'">{{ row.number ?? '—' }}</td><!-- table cell preview -->
+                    <td class="text-sm py-[7px] px-2.5 border-b border-line/60" :class="row.name === null ? 'text-ink-4' : 'text-ink-2'">{{ row.name ?? '—' }}</td><!-- table cell preview -->
                   </tr>
                   </tbody>
                 </table>

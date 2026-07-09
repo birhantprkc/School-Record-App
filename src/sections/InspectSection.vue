@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, onMounted, ref, watch} from 'vue'
 import {save} from '@tauri-apps/plugin-dialog'
 import {revealItemInDir} from '@tauri-apps/plugin-opener'
@@ -353,7 +353,7 @@ onMounted(() => {
         <p class="text-base text-ink-5 m-0 mb-6">학교생활기록부 점검에 사용할 유의어 그룹과 검색 대상 단어를 관리합니다.</p>
 
         <!-- 로딩 -->
-        <div v-if="store.loading" class="flex items-center gap-2.5 py-8 text-ink-5 text-sm">
+        <div v-if="store.loading" class="flex items-center gap-2.5 py-8 text-ink-5 text-base">
           <Loader2 :size="22" class="animate-spin"/>
           불러오는 중...
         </div>
@@ -374,7 +374,7 @@ onMounted(() => {
               <!-- 그룹 헤더 -->
               <div class="flex items-center gap-2.5">
                 <span class="text-base font-semibold text-ink flex-1">{{ group.name }}</span>
-                <span class="text-xs text-ink-5 bg-line py-[2px] px-2 rounded-xl">{{ group.items.length }}개</span>
+                <!-- badge: 유의어 수 뱃지 --><span class="text-xs text-ink-5 bg-line py-[2px] px-2 rounded-xl">{{ group.items.length }}개</span>
                 <button
                     class="flex items-center justify-center w-7 h-7 border-none rounded-[6px] cursor-pointer bg-transparent text-red transition-colors hover:bg-red/[0.15]"
                     @click="removeGroup(group.id)" title="그룹 삭제"
@@ -386,7 +386,7 @@ onMounted(() => {
               <!-- 단어 chips -->
               <div class="flex flex-wrap gap-1.5 min-h-7">
                 <span v-for="item in group.items" :key="item.id"
-                      class="inline-flex items-center gap-1 bg-line border border-line-2 rounded-[20px] py-[3px] px-2.5 text-sm text-ink-2">
+                      class="inline-flex items-center gap-1 bg-line border border-line-2 rounded-[20px] py-[3px] px-2.5 text-sm text-ink-2"> <!-- badge: 유의어 단어 칩 -->
                   {{ item.word }}
                   <button
                       class="flex items-center bg-transparent border-none cursor-pointer text-ink-4 p-0 ml-0.5 transition-colors hover:text-red"
@@ -395,20 +395,20 @@ onMounted(() => {
                     <X :size="11"/>
                   </button>
                 </span>
-                <span v-if="group.items.length === 0" class="text-xs text-ink-4 italic">단어 없음</span>
+                <!-- caption: 빈 그룹 안내 --><span v-if="group.items.length === 0" class="text-xs text-ink-4 italic">단어 없음</span>
               </div>
 
               <!-- 단어 추가 입력 -->
               <div class="flex gap-2 items-center">
                 <input
-                    class="flex-1 bg-line border border-line-2 rounded-[6px] py-1.5 px-2.5 text-sm text-ink outline-none transition-colors focus:border-blue"
+                    class="flex-1 bg-line border border-line-2 rounded-[6px] py-1.5 px-2.5 text-base text-ink outline-none transition-colors focus:border-blue"
                     placeholder="단어 추가..."
                     :value="getWordInput(group.id)"
                     @input="setWordInput(group.id, $event.target.value)"
                     @keydown.enter="submitWord(group.id)"
                 />
                 <button
-                    class="inline-flex items-center gap-1 py-1.5 px-3 rounded-[6px] border-none text-sm font-medium cursor-pointer transition-colors bg-blue text-white hover:bg-blue-2"
+                    class="inline-flex items-center gap-1 py-1.5 px-3 rounded-[6px] border-none text-base font-medium cursor-pointer transition-colors bg-blue text-white hover:bg-blue-2"
                     @click="submitWord(group.id)"
                 >
                   <Plus :size="13"/>
@@ -418,18 +418,18 @@ onMounted(() => {
 
               <!-- 유의어 일괄 등록 -->
               <details class="border-t border-line pt-2.5">
-                <summary class="text-xs text-ink-5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                <summary class="text-base text-ink-5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
                   유의어 일괄 등록
                 </summary>
                 <div class="flex flex-col gap-2 mt-2.5">
                   <textarea
-                      class="w-full min-h-[80px] bg-line border border-line-2 rounded-[6px] py-2 px-2.5 text-sm text-ink resize-y outline-none box-border transition-colors focus:border-blue"
+                      class="w-full min-h-[80px] bg-line border border-line-2 rounded-[6px] py-2 px-2.5 text-base text-ink resize-y outline-none box-border transition-colors focus:border-blue"
                       placeholder="줄바꿈 또는 쉼표로 구분하여 여러 단어를 입력하세요"
                       :value="getCsvInput(group.id)"
                       @input="setCsvInput(group.id, $event.target.value)"
                   />
                   <button
-                      class="inline-flex items-center gap-1 py-1.5 px-3 rounded-[6px] border-none text-sm font-medium cursor-pointer transition-colors bg-blue text-white enabled:hover:bg-blue-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      class="inline-flex items-center gap-1 py-1.5 px-3 rounded-[6px] border-none text-base font-medium cursor-pointer transition-colors bg-blue text-white enabled:hover:bg-blue-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       :disabled="csvUploading[group.id]"
                       @click="submitCsv(group.id)"
                   >
@@ -448,28 +448,28 @@ onMounted(() => {
               <div class="flex gap-2 items-center">
                 <input
                     v-model="newGroupName"
-                    class="flex-1 bg-line border border-line-2 rounded-[6px] py-2 px-3 text-sm text-ink outline-none transition-colors focus:border-blue"
+                    class="flex-1 bg-line border border-line-2 rounded-[6px] py-2 px-3 text-base text-ink outline-none transition-colors focus:border-blue"
                     placeholder="새 그룹 이름"
                     @keydown.enter="submitNewGroup"
                     @keydown.esc="showAddGroup = false; addGroupError = ''"
                     autofocus
                 />
                 <button
-                    class="inline-flex items-center gap-1 py-1.5 px-3 rounded-[6px] border-none text-sm font-medium cursor-pointer transition-colors bg-blue text-white hover:bg-blue-2"
+                    class="inline-flex items-center gap-1 py-1.5 px-3 rounded-[6px] border-none text-base font-medium cursor-pointer transition-colors bg-blue text-white hover:bg-blue-2"
                     @click="submitNewGroup"
                 >
                   <Plus :size="13"/>
                   생성
                 </button>
                 <button
-                    class="py-2 px-3.5 border border-line-2 rounded-[6px] bg-transparent text-ink-5 text-sm cursor-pointer transition-[border-color,color] hover:border-ink-5 hover:text-ink-2"
+                    class="py-2 px-3.5 border border-line-2 rounded-[6px] bg-transparent text-ink-5 text-base cursor-pointer transition-[border-color,color] hover:border-ink-5 hover:text-ink-2"
                     @click="showAddGroup = false; addGroupError = ''"
                 >취소</button>
               </div>
-              <p v-if="addGroupError" class="text-xs text-red m-0 mt-1.5">{{ addGroupError }}</p>
+              <p v-if="addGroupError" class="text-base text-red m-0 mt-1.5">{{ addGroupError }}</p>
             </template>
             <button v-else
-                    class="inline-flex items-center gap-1.5 py-2 px-4 bg-transparent border border-dashed border-line-2 rounded-lg text-ink-5 text-sm cursor-pointer transition-[border-color,color] hover:border-blue hover:text-violet"
+                    class="inline-flex items-center gap-1.5 py-2 px-4 bg-transparent border border-dashed border-line-2 rounded-lg text-ink-5 text-base cursor-pointer transition-[border-color,color] hover:border-blue hover:text-violet"
                     @click="showAddGroup = true"
             >
               <Plus :size="15"/>
@@ -505,14 +505,14 @@ onMounted(() => {
               <Check v-if="isSelected(group.id)" :size="13"/>
             </div>
             <div class="flex-1 flex flex-col gap-0.5">
-              <span class="text-sm font-semibold text-ink">{{ group.name }}</span>
-              <span class="text-xs text-ink-5">{{ group.items.length }}개 단어</span>
+              <span class="text-base font-semibold text-ink">{{ group.name }}</span>
+              <!-- caption: 그룹 단어 수 --><span class="text-xs text-ink-5">{{ group.items.length }}개 단어</span>
             </div>
             <ChevronRight :size="16" class="text-ink-5"/>
           </label>
         </div>
 
-        <div class="text-sm text-ink-5 mb-5">
+        <div class="text-base text-ink-5 mb-5">
           선택된 그룹: <strong class="text-violet">{{ selectedGroupIds.length }}개</strong> &nbsp;|&nbsp;
           중복 제거 단어: <strong class="text-violet">{{ selectedWordCount }}개</strong>
         </div>
@@ -532,7 +532,7 @@ onMounted(() => {
           >
             <Check v-if="scopeMode === 'all'" :size="14" class="absolute top-2.5 right-3 text-blue-2"/>
             <span class="text-base font-semibold text-ink">전체 영역</span>
-            <span class="text-sm text-ink-5">모든 생기부 기록을 점검합니다</span>
+            <span class="text-base text-ink-5">모든 생기부 기록을 점검합니다</span>
           </div>
           <div
               class="relative border-2 rounded-[10px] py-[18px] px-5 cursor-pointer flex flex-col gap-1.5 transition-[border-color,background-color] duration-200"
@@ -541,7 +541,7 @@ onMounted(() => {
           >
             <Check v-if="scopeMode === 'specific'" :size="14" class="absolute top-2.5 right-3 text-blue-2"/>
             <span class="text-base font-semibold text-ink">특정 영역</span>
-            <span class="text-sm text-ink-5">점검할 영역을 직접 선택합니다</span>
+            <span class="text-base text-ink-5">점검할 영역을 직접 선택합니다</span>
           </div>
         </div>
 
@@ -550,8 +550,8 @@ onMounted(() => {
             class="mb-5 transition-opacity"
             :class="{ 'opacity-35 pointer-events-none': scopeMode !== 'specific' }"
         >
-          <p class="text-sm text-ink-5 m-0 mb-3">점검할 영역 선택</p>
-          <p v-if="areaStore.areas.length === 0" class="text-sm text-ink-4">등록된 영역이 없습니다.</p>
+          <p class="text-base text-ink-5 m-0 mb-3">점검할 영역 선택</p>
+          <p v-if="areaStore.areas.length === 0" class="text-base text-ink-4">등록된 영역이 없습니다.</p>
           <div v-else class="grid gap-3 grid-cards-200">
             <div
                 v-for="area in areaStore.areas"
@@ -562,10 +562,10 @@ onMounted(() => {
             >
               <Check v-if="isAreaSelected(area.id)" :size="14" class="absolute top-2.5 right-3 text-blue-2"/>
               <span class="text-base font-semibold text-ink">{{ area.name }}</span>
-              <span class="text-sm text-ink-5">활동 {{ area.activities.length }}개</span>
+              <span class="text-base text-ink-5">활동 {{ area.activities.length }}개</span>
             </div>
           </div>
-          <p v-if="scopeMode === 'specific' && selectedAreaIds.length > 0" class="text-sm text-ink-5 mt-3">
+          <p v-if="scopeMode === 'specific' && selectedAreaIds.length > 0" class="text-base text-ink-5 mt-3">
             {{ selectedAreaIds.length }}개 영역 선택됨
           </p>
         </div>
@@ -600,7 +600,7 @@ onMounted(() => {
             </p>
           </div>
           <button v-if="inspectResults.length > 0"
-                  class="inline-flex items-center gap-[7px] py-[9px] px-[18px] bg-green/25 border border-green/40 rounded-lg text-green text-sm font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors enabled:hover:bg-green/35 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="inline-flex items-center gap-[7px] py-[9px] px-[18px] bg-green/25 border border-green/40 rounded-lg text-green text-base font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors enabled:hover:bg-green/35 disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="exporting"
                   @click="exportToExcel"
           >
@@ -616,8 +616,9 @@ onMounted(() => {
           <p class="text-base text-ink-4 m-0">유의어가 발견되지 않았습니다.</p>
         </div>
 
+        <!-- table cell preview: 점검 결과 테이블 -->
         <div v-else class="overflow-x-auto border border-line rounded-[10px]">
-          <table class="min-w-full table-fixed border-collapse text-sm [&_tr:hover_td]:bg-blue/[0.04] [&_tr:last-child_td]:border-b-0">
+          <table class="min-w-full table-fixed border-collapse text-xs [&_tr:hover_td]:bg-blue/[0.04] [&_tr:last-child_td]:border-b-0">
             <colgroup>
               <col class="w-10">
               <col class="w-10">
@@ -642,11 +643,11 @@ onMounted(() => {
             </thead>
             <tbody>
             <tr v-for="{ record, detectedWords } in inspectResults" :key="record.id">
-              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.grade || '' }}</td>
-              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.class_num || '' }}</td>
-              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.number || '—' }}</td>
-              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.student_name || '—' }}</td>
-              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-5 text-xs break-keep">{{ record.area_name || '—' }}</td>
+              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.grade || '' }}</td><!-- table cell preview -->
+              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.class_num || '' }}</td><!-- table cell preview -->
+              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.number || '—' }}</td><!-- table cell preview -->
+              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap text-xs text-ink-4">{{ record.student_name || '—' }}</td><!-- table cell preview -->
+              <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-5 text-xs break-keep">{{ record.area_name || '—' }}</td><!-- table cell preview -->
               <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 font-medium break-keep">{{ record.activity_name }}</td>
               <td class="cell-content py-2.5 px-3.5 align-top border-b border-raised text-ink-2 leading-relaxed break-all">
                 <DiffView
@@ -655,6 +656,7 @@ onMounted(() => {
                 />
               </td>
               <td class="py-2.5 px-3.5 align-top border-b border-raised text-ink-2 whitespace-nowrap">
+                <!-- badge: 감지된 유의어 뱃지 -->
                 <span
                     v-for="word in detectedWords"
                     :key="word"
@@ -675,10 +677,10 @@ onMounted(() => {
         <div class="flex gap-8">
           <div class="flex flex-col items-center gap-1">
             <span class="text-[36px] font-bold text-blue-2">{{ exportResult.rowCount }}</span>
-            <span class="text-sm text-ink-5">행 저장됨</span>
+            <span class="text-base text-ink-5">행 저장됨</span>
           </div>
         </div>
-        <p class="text-sm text-ink-5 m-0">{{ exportResult.fileName }}</p>
+        <p class="text-base text-ink-5 m-0">{{ exportResult.fileName }}</p>
         <div class="flex gap-2.5 mt-2">
           <button
               class="py-[9px] px-6 bg-blue/[0.12] border border-blue/35 rounded-lg text-blue-2 text-base cursor-pointer transition-colors hover:bg-blue/[0.22] hover:text-ink-2"

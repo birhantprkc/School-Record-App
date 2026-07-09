@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, ref} from 'vue'
 import {save} from '@tauri-apps/plugin-dialog'
 import {useActivityStore} from '../stores/activity.js'
@@ -724,12 +724,12 @@ function resetWizard() {
             <!-- A 타입 (예시용, 클릭 불가) -->
             <div class="border-2 border-line rounded-xl p-5 cursor-default">
               <div class="flex items-center gap-2.5 mb-2.5">
-                <span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-red bg-red/[0.12] border border-red/35">A 타입</span>
+                <!-- badge: 파일 형식 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-red bg-red/[0.12] border border-red/35">A 타입</span>
                 <span class="text-base font-semibold text-ink">행 단위 활동 형식</span>
               </div>
-              <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
+              <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
               <div class="overflow-x-auto border border-line rounded-[6px] [&_tr:last-child_td]:border-b-0">
-                <table class="border-collapse w-full text-xs">
+                <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                   <thead><tr>
                     <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
                     <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">반</th>
@@ -745,7 +745,7 @@ function resetWizard() {
                   </tbody>
                 </table>
               </div>
-              <button class="flex items-center gap-1.5 mt-3.5 py-[7px] px-3.5 bg-blue/[0.08] border border-blue/25 rounded-[7px] text-blue-2 text-sm cursor-pointer transition-[background-color,color] hover:bg-blue/[0.18]" @click.stop="downloadSampleA">
+              <button class="flex items-center gap-1.5 mt-3.5 py-[7px] px-3.5 bg-blue/[0.08] border border-blue/25 rounded-[7px] text-blue-2 text-base cursor-pointer transition-[background-color,color] hover:bg-blue/[0.18]" @click.stop="downloadSampleA">
                 <Download :size="13"/>
                 A타입 예시 다운로드
               </button>
@@ -754,12 +754,12 @@ function resetWizard() {
             <!-- B 타입 (예시용, 클릭 불가) -->
             <div class="border-2 border-line rounded-xl p-5 cursor-default">
               <div class="flex items-center gap-2.5 mb-2.5">
-                <span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-amber bg-amber/[0.15] border border-amber/40">B 타입</span>
+                <!-- badge: 파일 형식 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-amber bg-amber/[0.15] border border-amber/40">B 타입</span>
                 <span class="text-base font-semibold text-ink">열 단위 활동 형식</span>
               </div>
-              <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
+              <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
               <div class="overflow-x-auto border border-line rounded-[6px] [&_tr:last-child_td]:border-b-0">
-                <table class="border-collapse w-full text-xs">
+                <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                   <thead><tr>
                     <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
                     <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">반</th>
@@ -775,7 +775,7 @@ function resetWizard() {
                   </tbody>
                 </table>
               </div>
-              <button class="flex items-center gap-1.5 mt-3.5 py-[7px] px-3.5 bg-blue/[0.08] border border-blue/25 rounded-[7px] text-blue-2 text-sm cursor-pointer transition-[background-color,color] hover:bg-blue/[0.18]" @click.stop="downloadSampleB">
+              <button class="flex items-center gap-1.5 mt-3.5 py-[7px] px-3.5 bg-blue/[0.08] border border-blue/25 rounded-[7px] text-blue-2 text-base cursor-pointer transition-[background-color,color] hover:bg-blue/[0.18]" @click.stop="downloadSampleB">
                 <Download :size="13"/>
                 B타입 예시 다운로드
               </button>
@@ -801,16 +801,16 @@ function resetWizard() {
           <FileSpreadsheet :size="40" class="text-ink-5"/>
           <p v-if="!fileName" class="text-base text-ink-5 m-0">파일을 여기에 드래그하거나 클릭하여 선택</p>
           <p v-else class="text-base font-semibold text-ink-2 m-0">{{ fileName }}</p>
-          <p class="text-sm text-ink-5 m-0">CSV, XLSX 지원</p>
+          <p class="text-base text-ink-5 m-0">CSV, XLSX 지원</p>
         </div>
 
-        <p v-if="parseError" class="text-sm text-red my-3 mb-6">{{ parseError }}</p>
+        <p v-if="parseError" class="text-base text-red my-3 mb-6">{{ parseError }}</p>
 
         <div v-if="rawHeaders.length > 0">
           <div class="mb-3 pb-3 border-b border-line"></div>
-          <p class="text-sm text-ink-5 m-0 mb-2.5">미리보기 (첫 {{ Math.min(rawData.length, 5) }}행)</p>
+          <p class="text-base text-ink-5 m-0 mb-2.5">미리보기 (첫 {{ Math.min(rawData.length, 5) }}행)</p>
           <div class="overflow-x-auto border border-line rounded-lg">
-            <table class="border-collapse min-w-full text-sm">
+            <!-- table cell preview: 원본 파일 미리보기 --><table class="border-collapse min-w-full text-sm">
               <thead><tr>
                 <th v-for="h in rawHeaders" :key="h" class="py-2 px-3 bg-surface text-ink-5 font-semibold text-left whitespace-nowrap border-b border-line">{{ h }}</th>
               </tr></thead>
@@ -837,12 +837,12 @@ function resetWizard() {
               @click="fileType = 'A'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-red bg-red/[0.12] border border-red/35">A 타입</span>
+              <!-- badge: 파일 형식 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-red bg-red/[0.12] border border-red/35">A 타입</span>
               <span class="text-base font-semibold text-ink">행 단위 활동 형식</span>
             </div>
-            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
+            <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
             <div class="overflow-x-auto border border-line rounded-[6px] [&_tr:last-child_td]:border-b-0">
-              <table class="border-collapse w-full text-xs">
+              <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                 <thead><tr>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">반</th>
@@ -867,12 +867,12 @@ function resetWizard() {
               @click="fileType = 'B'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-amber bg-amber/[0.15] border border-amber/40">B 타입</span>
+              <!-- badge: 파일 형식 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-[2px] px-2 text-amber bg-amber/[0.15] border border-amber/40">B 타입</span>
               <span class="text-base font-semibold text-ink">열 단위 활동 형식</span>
             </div>
-            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
+            <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
             <div class="overflow-x-auto border border-line rounded-[6px] [&_tr:last-child_td]:border-b-0">
-              <table class="border-collapse w-full text-xs">
+              <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                 <thead><tr>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">반</th>
@@ -902,13 +902,13 @@ function resetWizard() {
           <span class="text-base text-ink-2 whitespace-nowrap">학생 식별 방식</span>
           <div class="flex gap-0 border border-line rounded-lg overflow-hidden">
             <button
-                class="py-[7px] px-4 bg-transparent border-none text-sm cursor-pointer transition-[background-color,color]"
+                class="py-[7px] px-4 bg-transparent border-none text-base cursor-pointer transition-[background-color,color]"
                 :class="idMode === 'fields' ? 'bg-blue/[0.12] text-blue-2' : 'text-ink-5'"
                 @click="idMode = 'fields'"
             >학년 · 반 · 번호
             </button>
             <button
-                class="py-[7px] px-4 bg-transparent border-none text-sm cursor-pointer transition-[background-color,color] border-l border-line"
+                class="py-[7px] px-4 bg-transparent border-none text-base cursor-pointer transition-[background-color,color] border-l border-line"
                 :class="idMode === 'studentId' ? 'bg-blue/[0.12] text-blue-2' : 'text-ink-5'"
                 @click="idMode = 'studentId'"
             >학번
@@ -921,14 +921,14 @@ function resetWizard() {
           <template v-if="idMode === 'studentId'">
             <div class="grid grid-cols-[160px_1fr] items-center gap-4">
               <label class="text-base text-ink-2">학번 <span class="text-red ml-0.5">*</span></label>
-              <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-sm outline-none cursor-pointer focus:border-blue/50" v-model="colMap['studentId']">
+              <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-base outline-none cursor-pointer focus:border-blue/50" v-model="colMap['studentId']">
                 <option :value="null">— 선택 안 함 —</option>
                 <option v-for="(h, i) in rawHeaders" :key="i" :value="i">{{ h }}</option>
               </select>
             </div>
             <div v-if="colMap['studentId'] !== null" class="mt-1 py-3.5 px-4 bg-surface border border-line rounded-lg">
-              <p class="text-sm text-ink-5 m-0 mb-2.5">파싱 미리보기 (ABCC·4자리, ABBCC·5자리, ABBCCC·6자리 / A=학년, B=반, C=번호)</p>
-              <table class="border-collapse w-auto text-sm sid-preview-table">
+              <p class="text-base text-ink-5 m-0 mb-2.5">파싱 미리보기 (ABCC·4자리, ABBCC·5자리, ABBCCC·6자리 / A=학년, B=반, C=번호)</p>
+              <!-- table cell preview: 학번 파싱 미리보기 --><table class="border-collapse w-auto text-sm sid-preview-table">
                 <thead><tr>
                   <th class="py-2 px-3 bg-base text-ink-5 font-semibold text-left whitespace-nowrap border-b border-line">학번 원본</th>
                   <th class="py-2 px-3 bg-base text-ink-5 font-semibold text-left whitespace-nowrap border-b border-line">학년</th>
@@ -950,7 +950,7 @@ function resetWizard() {
           <template v-else>
             <div v-for="field in ['grade','classNum','number']" :key="field" class="grid grid-cols-[160px_1fr] items-center gap-4">
               <label class="text-base text-ink-2">{{ FIELD_LABELS_A[field] }} <span class="text-red ml-0.5">*</span></label>
-              <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-sm outline-none cursor-pointer focus:border-blue/50" v-model="colMap[field]">
+              <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-base outline-none cursor-pointer focus:border-blue/50" v-model="colMap[field]">
                 <option :value="null">— 선택 안 함 —</option>
                 <option v-for="(h, i) in rawHeaders" :key="i" :value="i">{{ h }}</option>
               </select>
@@ -960,7 +960,7 @@ function resetWizard() {
           <!-- 이름 (공통, 선택) -->
           <div class="grid grid-cols-[160px_1fr] items-center gap-4">
             <label class="text-base text-ink-2">이름 (선택)</label>
-            <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-sm outline-none cursor-pointer focus:border-blue/50" v-model="colMap['name']">
+            <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-base outline-none cursor-pointer focus:border-blue/50" v-model="colMap['name']">
               <option :value="null">— 선택 안 함 —</option>
               <option v-for="(h, i) in rawHeaders" :key="i" :value="i">{{ h }}</option>
             </select>
@@ -970,7 +970,7 @@ function resetWizard() {
           <template v-if="fileType === 'A'">
             <div v-for="field in ['activityName','activityContent']" :key="field" class="grid grid-cols-[160px_1fr] items-center gap-4">
               <label class="text-base text-ink-2">{{ FIELD_LABELS_A[field] }} <span class="text-red ml-0.5">*</span></label>
-              <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-sm outline-none cursor-pointer focus:border-blue/50" v-model="colMap[field]">
+              <select class="py-2 px-3 bg-surface border border-line rounded-lg text-ink text-base outline-none cursor-pointer focus:border-blue/50" v-model="colMap[field]">
                 <option :value="null">— 선택 안 함 —</option>
                 <option v-for="(h, i) in rawHeaders" :key="i" :value="i">{{ h }}</option>
               </select>
@@ -981,15 +981,15 @@ function resetWizard() {
             <div class="grid grid-cols-[160px_1fr] items-center gap-4">
               <label class="text-base text-ink-2">활동 열 (자동)</label>
               <div class="flex flex-wrap gap-1.5 items-center min-h-9">
-                <span v-if="extractedActivities.length === 0" class="text-sm text-ink-5">학생 정보 열을 선택하면 나머지가 활동 열로 지정됩니다.</span>
+                <span v-if="extractedActivities.length === 0" class="text-base text-ink-5">학생 정보 열을 선택하면 나머지가 활동 열로 지정됩니다.</span>
                 <span v-for="n in extractedActivities" :key="n"
-                      class="text-sm text-blue-2 bg-blue/[0.10] border border-blue/25 rounded-[6px] py-[3px] px-2">{{ n }}</span>
+                      class="text-sm text-blue-2 bg-blue/[0.10] border border-blue/25 rounded-[6px] py-[3px] px-2">{{ n }}</span><!-- badge: 활동 열 칩 -->
               </div>
             </div>
           </template>
 
-          <p v-if="hasDuplicateCols" class="text-sm text-red m-0 mt-2">동일한 열을 여러 필드에 지정할 수 없습니다. 각 필드에 서로 다른 열을 선택해 주세요.</p>
-          <p v-if="importError" class="text-sm text-red m-0 mt-2">{{ importError }}</p>
+          <p v-if="hasDuplicateCols" class="text-base text-red m-0 mt-2">동일한 열을 여러 필드에 지정할 수 없습니다. 각 필드에 서로 다른 열을 선택해 주세요.</p>
+          <p v-if="importError" class="text-base text-red m-0 mt-2">{{ importError }}</p>
         </div>
       </div>
 
@@ -1001,7 +1001,7 @@ function resetWizard() {
         <p v-if="extractedActivities.length === 0" class="text-base text-ink-5 m-0">파일에서 활동을 찾을 수 없습니다. 이전 단계로 돌아가 열 매핑을 확인하세요.</p>
 
         <div v-else class="flex flex-col border border-line rounded-[10px] overflow-hidden">
-          <div class="grid items-center gap-3 py-2.5 px-4 bg-surface text-sm font-semibold text-ink-5 border-b border-line grid-mapper">
+          <div class="grid items-center gap-3 py-2.5 px-4 bg-surface text-base font-semibold text-ink-5 border-b border-line grid-mapper">
             <span>파일의 활동명</span>
             <span></span>
             <span>연결할 활동</span>
@@ -1010,7 +1010,7 @@ function resetWizard() {
                class="grid items-center gap-3 py-2.5 px-4 border-b border-line/70 last:border-b-0 grid-mapper">
             <span class="text-base text-ink-2">{{ actName }}</span>
             <span class="text-base text-ink-5 text-center">→</span>
-            <select class="py-[7px] px-2.5 bg-surface border border-line rounded-lg text-ink text-sm outline-none cursor-pointer w-full focus:border-blue/50"
+            <select class="py-[7px] px-2.5 bg-surface border border-line rounded-lg text-ink text-base outline-none cursor-pointer w-full focus:border-blue/50"
                     v-model="activityMatchMap[actName]">
               <option :value="0">＋ 새로 만들기</option>
               <option v-for="a in dbActivities" :key="a.id" :value="a.id">{{ a.name }}</option>
@@ -1025,17 +1025,17 @@ function resetWizard() {
         <p class="text-base text-ink-5 m-0 mb-6">기존 데이터와 비교하여 변경될 항목을 확인하고 업데이트할 항목을 선택하세요.</p>
 
         <div v-if="previewLoading" class="py-12 text-center text-ink-5 text-base">기존 데이터와 비교 중...</div>
-        <p v-if="previewError" class="text-sm text-red my-3 mb-6">
+        <p v-if="previewError" class="text-base text-red my-3 mb-6">
           {{ previewError }}<br>
-          <span class="text-xs text-ink-5">미리보기 오류가 있어도 다음 단계로 진행하면 모든 항목이 가져와집니다.</span>
+          <span class="text-xs text-ink-5">미리보기 오류가 있어도 다음 단계로 진행하면 모든 항목이 가져와집니다.</span><!-- caption: 오류 안내 서브노트 -->
         </p>
 
         <template v-if="!previewLoading">
           <!-- 통계 바 -->
           <div class="flex gap-2.5 mb-5 flex-wrap">
-            <span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-amber bg-amber/[0.10] border-amber/30">변경 {{ changedPreviewItems.length }}건</span>
-            <span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-green bg-green/[0.10] border-green/30">신규 {{ newPreviewItemsCount }}건</span>
-            <span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-ink-5 bg-line/20 border-line">동일 {{ unchangedCount }}건</span>
+            <!-- badge: 변경 통계 뱃지 --><span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-amber bg-amber/[0.10] border-amber/30">변경 {{ changedPreviewItems.length }}건</span>
+            <!-- badge: 신규 통계 뱃지 --><span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-green bg-green/[0.10] border-green/30">신규 {{ newPreviewItemsCount }}건</span>
+            <!-- badge: 동일 통계 뱃지 --><span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-ink-5 bg-line/20 border-line">동일 {{ unchangedCount }}건</span>
           </div>
 
           <!-- 변경 항목 없음 -->
@@ -1048,7 +1048,7 @@ function resetWizard() {
           <!-- 변경 항목 목록 -->
           <template v-else>
             <div class="flex items-center justify-between mb-3.5 flex-wrap gap-2.5">
-              <label class="flex items-center gap-2 text-sm text-ink-2 cursor-pointer select-none">
+              <label class="flex items-center gap-2 text-base text-ink-2 cursor-pointer select-none">
                 <input
                     type="checkbox"
                     class="w-[15px] h-[15px] cursor-pointer accent-blue"
@@ -1056,17 +1056,17 @@ function resetWizard() {
                     @change="toggleAllChanged"
                 />
                 전체 선택/해제
-                <span class="text-ink-5 text-sm">({{ checkedChangedCount }}/{{ changedPreviewItems.length }})</span>
+                <span class="text-ink-5 text-base">({{ checkedChangedCount }}/{{ changedPreviewItems.length }})</span>
               </label>
               <div class="flex border border-line rounded-lg overflow-hidden">
                 <button
-                    class="py-1.5 px-3.5 bg-transparent border-none text-sm cursor-pointer transition-[background-color,color]"
+                    class="py-1.5 px-3.5 bg-transparent border-none text-base cursor-pointer transition-[background-color,color]"
                     :class="diffViewMode === 'raw' ? 'bg-blue/[0.12] text-blue-2' : 'text-ink-5'"
                     @click="diffViewMode = 'raw'"
                 >원문 보기
                 </button>
                 <button
-                    class="py-1.5 px-3.5 bg-transparent border-none text-sm cursor-pointer transition-[background-color,color] border-l border-line"
+                    class="py-1.5 px-3.5 bg-transparent border-none text-base cursor-pointer transition-[background-color,color] border-l border-line"
                     :class="diffViewMode === 'diff' ? 'bg-blue/[0.12] text-blue-2' : 'text-ink-5'"
                     @click="diffViewMode = 'diff'"
                 >변경사항 보기
@@ -1091,24 +1091,24 @@ function resetWizard() {
                       :checked="checkedKeys.has(item.key)"
                       @change="toggleItem(item.key)"
                   />
-                  <span class="text-sm text-ink-2 font-semibold">
+                  <span class="text-base text-ink-2 font-semibold">
                     {{ item.grade }}학년 {{ item.class_num }}반 {{ item.number }}번
                     <template v-if="item.student_name"> · {{ item.student_name }}</template>
                   </span>
-                  <span class="text-ink-5 text-sm">|</span>
-                  <span class="text-sm text-amber">{{ item.activity_name }}</span>
+                  <span class="text-ink-5 text-base">|</span>
+                  <span class="text-base text-amber">{{ item.activity_name }}</span>
                 </div>
                 <div class="grid grid-cols-2">
                   <div class="py-3 px-3.5">
                     <div class="text-[11px] font-semibold text-ink-5 uppercase tracking-[0.06em] mb-1.5">기존</div>
-                    <div class="text-sm text-ink-2 leading-relaxed whitespace-pre-wrap break-all">
+                    <div class="text-base text-ink-2 leading-relaxed whitespace-pre-wrap break-all">
                       <DiffView v-if="diffViewMode === 'diff'" :before="item.new_content" :after="item.existing_content"/>
                       <template v-else>{{ item.existing_content }}</template>
                     </div>
                   </div>
                   <div class="py-3 px-3.5 border-l border-line">
                     <div class="text-[11px] font-semibold text-ink-5 uppercase tracking-[0.06em] mb-1.5">변경 후</div>
-                    <div class="text-sm text-ink-2 leading-relaxed whitespace-pre-wrap break-all">
+                    <div class="text-base text-ink-2 leading-relaxed whitespace-pre-wrap break-all">
                       <DiffView v-if="diffViewMode === 'diff'" :before="item.existing_content" :after="item.new_content"/>
                       <template v-else>{{ item.new_content }}</template>
                     </div>
@@ -1117,10 +1117,10 @@ function resetWizard() {
               </div>
             </div>
 
-            <p v-if="newPreviewItemsCount > 0" class="text-sm text-green mt-3.5">
+            <p v-if="newPreviewItemsCount > 0" class="text-base text-green mt-3.5">
               + 신규 기록 {{ newPreviewItemsCount }}건은 자동으로 추가됩니다.
             </p>
-            <p v-if="unchangedCount > 0" class="text-sm text-ink-5 mt-3.5">
+            <p v-if="unchangedCount > 0" class="text-base text-ink-5 mt-3.5">
               {{ unchangedCount }}건은 기존과 동일하여 건너뜁니다.
             </p>
           </template>
@@ -1134,28 +1134,28 @@ function resetWizard() {
         <div v-if="!importResult">
           <div class="border border-line rounded-[10px] overflow-hidden mb-6">
             <div class="grid gap-3 py-[11px] px-4 border-b border-line/70 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">파일</span>
-              <span class="text-sm text-ink-2">{{ fileName }}</span>
+              <span class="text-base text-ink-5">파일</span>
+              <span class="text-base text-ink-2">{{ fileName }}</span>
             </div>
             <div class="grid gap-3 py-[11px] px-4 border-b border-line/70 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">양식</span>
-              <span class="text-sm text-ink-2">{{ fileType === 'A' ? 'A타입 — 행 단위 활동 형식' : 'B타입 — 열 단위 활동 형식' }}</span>
+              <span class="text-base text-ink-5">양식</span>
+              <span class="text-base text-ink-2">{{ fileType === 'A' ? 'A타입 — 행 단위 활동 형식' : 'B타입 — 열 단위 활동 형식' }}</span>
             </div>
             <div class="grid gap-3 py-[11px] px-4 border-b border-line/70 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">데이터 행</span>
-              <span class="text-sm text-ink-2">{{ rawData.length }}행</span>
+              <span class="text-base text-ink-5">데이터 행</span>
+              <span class="text-base text-ink-2">{{ rawData.length }}행</span>
             </div>
             <div class="grid gap-3 py-[11px] px-4 border-b border-line/70 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">활동 수</span>
-              <span class="text-sm text-ink-2">{{ extractedActivities.length }}개</span>
+              <span class="text-base text-ink-5">활동 수</span>
+              <span class="text-base text-ink-2">{{ extractedActivities.length }}개</span>
             </div>
             <div class="grid gap-3 py-[11px] px-4 grid-detail-140">
-              <span class="text-sm text-ink-5">새로 만들 활동</span>
-              <span class="text-sm text-ink-2">{{ Object.values(activityMatchMap).filter(v => v === 0).length }}개</span>
+              <span class="text-base text-ink-5">새로 만들 활동</span>
+              <span class="text-base text-ink-2">{{ Object.values(activityMatchMap).filter(v => v === 0).length }}개</span>
             </div>
           </div>
 
-          <p v-if="importError" class="text-sm text-red my-3 mb-6">{{ importError }}</p>
+          <p v-if="importError" class="text-base text-red my-3 mb-6">{{ importError }}</p>
 
           <button
               class="py-2.5 px-7 bg-blue/[0.15] border border-blue/40 rounded-lg text-blue-2 text-base font-semibold cursor-pointer transition-colors enabled:hover:bg-blue/25 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1174,15 +1174,15 @@ function resetWizard() {
         <div class="flex gap-8">
           <div class="flex flex-col items-center gap-1">
             <span class="text-[28px] font-bold text-blue-2">{{ importResult.students_created }}</span>
-            <span class="text-sm text-ink-5">학생 신규 생성</span>
+            <span class="text-base text-ink-5">학생 신규 생성</span>
           </div>
           <div class="flex flex-col items-center gap-1">
             <span class="text-[28px] font-bold text-blue-2">{{ importResult.students_updated }}</span>
-            <span class="text-sm text-ink-5">학생 업데이트</span>
+            <span class="text-base text-ink-5">학생 업데이트</span>
           </div>
           <div class="flex flex-col items-center gap-1">
             <span class="text-[28px] font-bold text-blue-2">{{ importResult.records_saved }}</span>
-            <span class="text-sm text-ink-5">기록 저장</span>
+            <span class="text-base text-ink-5">기록 저장</span>
           </div>
         </div>
         <button
@@ -1197,11 +1197,11 @@ function resetWizard() {
         <div class="border border-line rounded-[10px] overflow-hidden mt-8 mb-2">
           <div class="flex items-center justify-between py-[9px] px-3.5 bg-surface cursor-pointer select-none"
                @click="previewCollapsed = !previewCollapsed">
-            <span class="text-sm text-ink-5">{{ fileName }} · {{ rawData.length }}행</span>
-            <span class="text-sm text-ink-5">{{ previewCollapsed ? '펼치기 ▾' : '접기 ▴' }}</span>
+            <span class="text-base text-ink-5">{{ fileName }} · {{ rawData.length }}행</span>
+            <span class="text-base text-ink-5">{{ previewCollapsed ? '펼치기 ▾' : '접기 ▴' }}</span>
           </div>
           <div v-if="!previewCollapsed" class="overflow-x-auto border-t border-line">
-            <table class="border-collapse min-w-full text-sm">
+            <table class="border-collapse min-w-full text-base">
               <thead><tr>
                 <th v-for="h in rawHeaders" :key="h" class="py-2 px-3 bg-surface text-ink-5 font-semibold text-left whitespace-nowrap border-b border-line">{{ h }}</th>
               </tr></thead>

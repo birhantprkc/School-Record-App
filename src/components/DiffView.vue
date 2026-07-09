@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed } from 'vue'
 import { diffChars } from 'diff'
 
@@ -11,7 +11,7 @@ const parts = computed(() => diffChars(props.before, props.after))
 </script>
 
 <template>
-  <span class="text-sm leading-relaxed whitespace-pre-wrap break-all">
+  <span class="text-base leading-relaxed whitespace-pre-wrap break-all">
     <template v-for="(part, i) in parts" :key="i">
       <span v-if="part.added"   class="bg-green/25 text-green">{{ part.value }}</span>
       <span v-else-if="part.removed" class="bg-red/25 text-red line-through">{{ part.value }}</span>

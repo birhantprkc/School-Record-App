@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {ref} from 'vue'
 import {AlertTriangle, KeyRound, Moon, Shield, ShieldOff, Sun} from 'lucide-vue-next'
 import {useConfigStore} from '../stores/configStore'
@@ -140,6 +140,7 @@ async function handlePasswordSubmit(payload) {
             <h3 class="text-lg font-semibold text-ink m-0">데이터 암호화</h3>
             <p class="text-base text-ink-4 m-0">학생 개인정보와 학교생활기록부 내용을 암호화하여 보호합니다.</p>
           </div>
+          <!-- badge: 암호화 활성화 상태 뱃지 -->
           <div
               :class="[
                 'ml-auto px-3 py-1 rounded-[20px] text-sm font-semibold flex-shrink-0',

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, onMounted, ref} from 'vue'
 import {save} from '@tauri-apps/plugin-dialog'
 import {useAreaStore} from '../stores/area.js'
@@ -251,7 +251,7 @@ async function doExport() {
               @click="exportType = 'C'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-green bg-green/[0.12] border border-green/30 whitespace-nowrap">C 타입</span>
+              <!-- badge: 내보내기 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-green bg-green/[0.12] border border-green/30 whitespace-nowrap">C 타입</span>
               <span class="text-base font-semibold text-ink">최종 나이스(NEIS) 문장 형식 (추천)</span>
             </div>
             <div class="flex items-center gap-3 mb-2.5" @click.stop>
@@ -266,10 +266,10 @@ async function doExport() {
                 <option value="double_newline">빈 줄 (↵↵)</option>
               </select>
             </div>
-            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">학생의 모든 활동 기록을 하나의 문장으로 결합해 내보냅니다.<br>
+            <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">학생의 모든 활동 기록을 하나의 문장으로 결합해 내보냅니다.<br>
               나이스(NEIS) 입력용 최종 문장 생성에 사용합니다.</p>
             <div class="overflow-x-auto border border-line rounded-[6px]">
-              <table class="border-collapse w-full text-xs">
+              <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                 <thead>
                 <tr>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
@@ -327,12 +327,12 @@ async function doExport() {
               @click="exportType = 'A'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-red bg-red/[0.12] border border-red/35 whitespace-nowrap">A 타입</span>
+              <!-- badge: 내보내기 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-red bg-red/[0.12] border border-red/35 whitespace-nowrap">A 타입</span>
               <span class="text-base font-semibold text-ink">행 단위 활동 형식</span>
             </div>
-            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
+            <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">한 행에 학생 1명의 활동 1개를 기재합니다.<br>학생 1명의 활동은 여러 행에 걸쳐 기록됩니다(학생 1명 = 여러 행).</p>
             <div class="overflow-x-auto border border-line rounded-[6px]">
-              <table class="border-collapse w-full text-xs">
+              <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                 <thead>
                 <tr>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
@@ -380,12 +380,12 @@ async function doExport() {
               @click="exportType = 'B'"
           >
             <div class="flex items-center gap-2.5 mb-2.5">
-              <span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-amber bg-amber/[0.15] border border-amber/40 whitespace-nowrap">B 타입</span>
+              <!-- badge: 내보내기 타입 뱃지 --><span class="text-xs font-bold rounded-[6px] py-0.5 px-2 text-amber bg-amber/[0.15] border border-amber/40 whitespace-nowrap">B 타입</span>
               <span class="text-base font-semibold text-ink">열 단위 활동 형식</span>
             </div>
-            <p class="text-sm text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
+            <p class="text-base text-ink-5 m-0 mb-3.5 leading-relaxed">활동이 열(헤더)로 구분된 형식입니다.<br>학생 1명의 모든 활동이 한 행에 기록됩니다(학생 1명 = 1행).</p>
             <div class="overflow-x-auto border border-line rounded-[6px]">
-              <table class="border-collapse w-full text-xs">
+              <!-- table cell preview: 형식 미리보기 --><table class="border-collapse w-full text-xs">
                 <thead>
                 <tr>
                   <th class="py-1.5 px-2 bg-base text-ink-5 font-semibold text-left border-b border-line whitespace-nowrap">학년</th>
@@ -434,7 +434,7 @@ async function doExport() {
         <h3 class="text-lg font-bold text-ink m-0 mb-1.5">Step 2. 영역(Area) 선택</h3>
         <p class="text-base text-ink-5 m-0 mb-6">내보낼 영역을 선택하세요.</p>
 
-        <p v-if="exportError && areaStore.areas.length === 0" class="text-sm text-red mt-3">{{ exportError }}</p>
+        <p v-if="exportError && areaStore.areas.length === 0" class="text-base text-red mt-3">{{ exportError }}</p>
         <p v-else-if="areaStore.areas.length === 0" class="text-base text-ink-5 m-0">등록된 영역이 없습니다.</p>
 
         <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
@@ -446,7 +446,7 @@ async function doExport() {
               @click="selectedAreaId = area.id"
           >
             <span class="text-base font-semibold text-ink">{{ area.name }}</span>
-            <span class="text-sm text-ink-5">활동 {{ area.activities.length }}개</span>
+            <span class="text-base text-ink-5">활동 {{ area.activities.length }}개</span>
           </div>
         </div>
       </div>
@@ -459,41 +459,41 @@ async function doExport() {
           <!-- 요약 -->
           <div class="border border-line rounded-[10px] overflow-hidden mb-6">
             <div class="grid border-b border-line/70 py-[11px] px-4 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">유형</span>
-              <span class="text-sm text-ink-2">{{ typeLabel }}</span>
+              <span class="text-base text-ink-5">유형</span>
+              <span class="text-base text-ink-2">{{ typeLabel }}</span>
             </div>
             <div class="grid border-b border-line/70 py-[11px] px-4 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">영역</span>
-              <span class="text-sm text-ink-2">{{ selectedArea?.name }}</span>
+              <span class="text-base text-ink-5">영역</span>
+              <span class="text-base text-ink-2">{{ selectedArea?.name }}</span>
             </div>
             <div class="grid border-b border-line/70 py-[11px] px-4 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">학생 수</span>
-              <span class="text-sm text-ink-2">{{ gridData?.students.length ?? 0 }}명</span>
+              <span class="text-base text-ink-5">학생 수</span>
+              <span class="text-base text-ink-2">{{ gridData?.students.length ?? 0 }}명</span>
             </div>
             <div class="grid border-b border-line/70 py-[11px] px-4 last:border-b-0 grid-detail-140">
-              <span class="text-sm text-ink-5">활동 수</span>
-              <span class="text-sm text-ink-2">{{ gridData?.activities.length ?? 0 }}개</span>
+              <span class="text-base text-ink-5">활동 수</span>
+              <span class="text-base text-ink-2">{{ gridData?.activities.length ?? 0 }}개</span>
             </div>
             <div class="grid py-[11px] px-4 grid-detail-140">
-              <span class="text-sm text-ink-5">예상 행 수</span>
-              <span class="text-sm text-ink-2">{{ estimatedRows }}행 (헤더 제외)</span>
+              <span class="text-base text-ink-5">예상 행 수</span>
+              <span class="text-base text-ink-2">{{ estimatedRows }}행 (헤더 제외)</span>
             </div>
           </div>
 
           <!-- 면책 안내문 -->
           <div class="flex gap-2.5 items-start mt-3.5 mb-6 px-3.5 py-3 border border-amber/30 bg-amber/[0.08] rounded-lg">
-            <span class="text-amber shrink-0 mt-[3px] text-sm inline-flex items-center justify-center w-[22px] h-[22px] border border-amber/30 rounded-full">ℹ</span>
+            <!-- badge: 안내 아이콘 뱃지 --><span class="text-amber shrink-0 mt-[3px] text-sm inline-flex items-center justify-center w-[22px] h-[22px] border border-amber/30 rounded-full">ℹ</span>
             <div class="flex flex-col gap-1.5">
               <p class="m-0 text-base leading-relaxed text-ink-2">
                 이 파일은 학교생활기록부 작성을 돕기 위한 <strong>참고용 자료</strong>입니다.<br>
                 반드시 <u><strong>담당 선생님께서 내용을 직접 검토</strong></u>하신 후 나이스(NEIS)에 입력해 주시기를
                 부탁드립니다.
               </p>
-              <p class="m-0 text-sm text-ink-4">내보내기를 실행하면 위 안내 사항을 확인하신 것으로 간주합니다.</p>
+              <p class="m-0 text-base text-ink-4">내보내기를 실행하면 위 안내 사항을 확인하신 것으로 간주합니다.</p>
             </div>
           </div>
 
-          <p v-if="exportError" class="text-sm text-red mt-3">{{ exportError }}</p>
+          <p v-if="exportError" class="text-base text-red mt-3">{{ exportError }}</p>
 
           <button
               class="py-2.5 px-7 bg-blue/[0.15] border border-blue/40 rounded-lg text-blue-2 text-base font-semibold cursor-pointer transition-colors enabled:hover:bg-blue/25 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -512,10 +512,10 @@ async function doExport() {
         <div class="flex gap-8">
           <div class="flex flex-col items-center gap-1">
             <span class="text-[28px] font-bold text-blue-2">{{ exportResult.rowCount }}</span>
-            <span class="text-sm text-ink-5">행 저장됨</span>
+            <span class="text-base text-ink-5">행 저장됨</span>
           </div>
         </div>
-        <p class="text-sm text-ink-5 m-0">{{ exportResult.fileName }}</p>
+        <p class="text-base text-ink-5 m-0">{{ exportResult.fileName }}</p>
         <div class="flex gap-2.5 mt-2">
           <button
               class="py-[9px] px-6 bg-blue/[0.12] border border-blue/35 rounded-lg text-blue-2 text-base cursor-pointer transition-colors hover:bg-blue/[0.22] hover:text-ink-2"

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {ref, watch} from 'vue'
 import {ArrowLeft, ArrowRight} from 'lucide-vue-next'
 
@@ -22,6 +22,7 @@ watch(() => props.currentStep, () => {
 <template>
   <div class="flex-1 overflow-hidden flex flex-col">
     <div class="flex items-center justify-end gap-2 px-10 py-2.5 border-b border-line shrink-0">
+      <!-- badge: 스텝 번호 원형 뱃지 -->
       <div
           v-for="n in stepCount"
           :key="n"

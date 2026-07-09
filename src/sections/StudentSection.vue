@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, onMounted, ref} from 'vue'
 import {Pencil, Plus, TableProperties, Users} from 'lucide-vue-next'
 import {useStudentStore} from '../stores/student'
@@ -141,19 +141,19 @@ async function handleDeleted() {
           <table class="w-full border-collapse student-table">
             <thead>
             <tr>
-              <th class="text-sm font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">학년</th>
-              <th class="text-sm font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">반</th>
-              <th class="text-sm font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">번호</th>
-              <th class="text-sm font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">이름</th>
-              <th class="text-sm font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase"></th>
+              <th class="text-base font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">학년</th>
+              <th class="text-base font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">반</th>
+              <th class="text-base font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">번호</th>
+              <th class="text-base font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase">이름</th>
+              <th class="text-base font-semibold text-ink-5 text-left px-4 py-3 bg-base border-b border-line tracking-[0.04em] uppercase"></th>
             </tr>
             </thead>
             <tbody>
             <template v-for="group in groupedStudents" :key="`${group.grade}-${group.classNum}`">
               <tr>
-                <td colspan="5" class="text-sm font-semibold text-blue-2 px-4 py-2.5 bg-blue/[0.05] border-t border-line border-b border-line">
+                <td colspan="5" class="text-base font-semibold text-blue-2 px-4 py-2.5 bg-blue/[0.05] border-t border-line border-b border-line">
                   {{ group.grade }}학년 {{ group.classNum }}반
-                  <span class="text-sm font-normal text-ink-5 ml-2">{{ group.students.length }}명</span>
+                  <span class="text-base font-normal text-ink-5 ml-2">{{ group.students.length }}명</span>
                 </td>
               </tr>
               <tr

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, onMounted, ref} from 'vue'
 import {save} from '@tauri-apps/plugin-dialog'
 import {useAreaStore} from '../stores/area.js'
@@ -334,7 +334,7 @@ async function doExport() {
         <h3 class="text-lg font-bold text-ink m-0 mb-1.5">Step 1. 영역(Area) 선택</h3>
         <p class="text-base text-ink-5 m-0 mb-6">체크리스트를 만들 영역을 선택하세요.</p>
 
-        <p v-if="exportError && areaStore.areas.length === 0" class="text-sm text-red mt-3 m-0">{{ exportError }}</p>
+        <p v-if="exportError && areaStore.areas.length === 0" class="text-base text-red mt-3 m-0">{{ exportError }}</p>
         <p v-else-if="areaStore.areas.length === 0" class="text-base text-ink-5 m-0 mb-6">등록된 영역이 없습니다.</p>
 
         <div v-else class="grid gap-3 mb-6 grid-cards-220">
@@ -350,7 +350,7 @@ async function doExport() {
               @click="selectedAreaId = area.id"
           >
             <span class="text-base font-semibold text-ink">{{ area.name }}</span>
-            <span class="text-sm text-ink-5">활동 {{ area.activities.length }}개</span>
+            <span class="text-base text-ink-5">활동 {{ area.activities.length }}개</span>
           </div>
         </div>
 
@@ -361,7 +361,7 @@ async function doExport() {
         >
           <div class="flex flex-col gap-1">
             <span class="text-base font-semibold text-ink">한 줄 미리보기</span>
-            <span class="text-sm text-ink-5 leading-relaxed">O(참여함)인 활동에 한해 생기부 첫 문장의 활동주제를 추출해 C열에 표시합니다.</span>
+            <span class="text-base text-ink-5 leading-relaxed">O(참여함)인 활동에 한해 생기부 첫 문장의 활동주제를 추출해 C열에 표시합니다.</span>
           </div>
           <div :class="['flex-shrink-0 w-[42px] h-6 rounded-full relative transition-colors border', previewEnabled ? 'bg-blue/60 border-blue/80' : 'bg-line border-line-2']">
             <div :class="['absolute top-[3px] w-4 h-4 rounded-full transition-all duration-200', previewEnabled ? 'left-[21px] bg-blue-2' : 'left-[3px] bg-ink-4']"/>
@@ -370,8 +370,8 @@ async function doExport() {
 
         <!-- 안내 박스 -->
         <div class="border border-green/20 rounded-btn bg-green/[0.04] px-4.5 py-3.5 flex flex-col gap-1.5">
-          <p class="text-sm text-green/75 m-0 leading-relaxed">기재 내용이 있으면 <strong class="text-green">O(참여함)</strong>, 없으면 <strong class="text-green">X(참여하지 않음)</strong>으로 표시됩니다.</p>
-          <p class="text-sm text-green/75 m-0 leading-relaxed">학생 1명당 1페이지(A4 세로)로 페이지 나누기가 설정됩니다.</p>
+          <p class="text-base text-green/75 m-0 leading-relaxed">기재 내용이 있으면 <strong class="text-green">O(참여함)</strong>, 없으면 <strong class="text-green">X(참여하지 않음)</strong>으로 표시됩니다.</p>
+          <p class="text-base text-green/75 m-0 leading-relaxed">학생 1명당 1페이지(A4 세로)로 페이지 나누기가 설정됩니다.</p>
         </div>
       </div>
 
@@ -385,7 +385,7 @@ async function doExport() {
         </p>
 
         <div class="border border-line rounded-btn overflow-hidden">
-          <table class="w-full border-collapse text-sm">
+          <table class="w-full border-collapse text-base">
             <thead>
             <tr>
               <th class="px-3.5 py-2.5 bg-base text-ink-4 font-semibold text-left border-b border-line sticky top-0 z-[1]">활동명</th>
@@ -396,7 +396,7 @@ async function doExport() {
             <tbody>
             <template v-for="group in previewGroups" :key="group.studentId">
               <tr class="bg-blue/[0.07]">
-                <td :colspan="previewEnabled ? 3 : 2" class="px-3.5 py-2 text-sm text-blue-2 border-t border-blue/20 border-b border-blue/12">
+                <td :colspan="previewEnabled ? 3 : 2" class="px-3.5 py-2 text-base text-blue-2 border-t border-blue/20 border-b border-blue/12">
                   {{ group.grade }}학년 {{ group.classNum }}반 {{ group.number }}번 &nbsp;
                   <strong class="font-bold text-blue-2">{{ group.name }}</strong>
                 </td>
@@ -412,7 +412,7 @@ async function doExport() {
                   <textarea
                       v-if="row.hasContent"
                       v-model="row.topic"
-                      class="w-full bg-surface border border-line-2 rounded-md px-2.5 py-[5px] text-ink text-sm outline-none transition-colors box-border leading-[1.4] min-h-5 resize-y whitespace-pre-wrap focus:border-blue/60 placeholder:text-ink-4"
+                      class="w-full bg-surface border border-line-2 rounded-md px-2.5 py-[5px] text-ink text-base outline-none transition-colors box-border leading-[1.4] min-h-5 resize-y whitespace-pre-wrap focus:border-blue/60 placeholder:text-ink-4"
                       rows="2"
                       placeholder="활동주제 입력…"
                   />
@@ -432,41 +432,41 @@ async function doExport() {
           <!-- 요약 박스 -->
           <div class="border border-line rounded-btn overflow-hidden mb-6">
             <div class="grid gap-3 px-4 py-[11px] border-b border-line/70 last:border-b-0 grid-detail-160">
-              <span class="text-sm text-ink-5">영역</span>
-              <span class="text-sm text-ink-2">{{ selectedArea?.name }}</span>
+              <span class="text-base text-ink-5">영역</span>
+              <span class="text-base text-ink-2">{{ selectedArea?.name }}</span>
             </div>
             <div class="grid gap-3 px-4 py-[11px] border-b border-line/70 last:border-b-0 grid-detail-160">
-              <span class="text-sm text-ink-5">학생 수</span>
-              <span class="text-sm text-ink-2">{{ gridData?.students.length ?? 0 }}명</span>
+              <span class="text-base text-ink-5">학생 수</span>
+              <span class="text-base text-ink-2">{{ gridData?.students.length ?? 0 }}명</span>
             </div>
             <div class="grid gap-3 px-4 py-[11px] border-b border-line/70 last:border-b-0 grid-detail-160">
-              <span class="text-sm text-ink-5">활동 수</span>
-              <span class="text-sm text-ink-2">{{ gridData?.activities.length ?? 0 }}개</span>
+              <span class="text-base text-ink-5">활동 수</span>
+              <span class="text-base text-ink-2">{{ gridData?.activities.length ?? 0 }}개</span>
             </div>
             <div class="grid gap-3 px-4 py-[11px] border-b border-line/70 last:border-b-0 grid-detail-160">
-              <span class="text-sm text-ink-5">예상 페이지 수</span>
-              <span class="text-sm text-ink-2">{{ gridData?.students.length ?? 0 }}페이지 (학생 1명 = 1페이지)</span>
+              <span class="text-base text-ink-5">예상 페이지 수</span>
+              <span class="text-base text-ink-2">{{ gridData?.students.length ?? 0 }}페이지 (학생 1명 = 1페이지)</span>
             </div>
             <div class="grid gap-3 px-4 py-[11px] border-b border-line/70 last:border-b-0 grid-detail-160">
-              <span class="text-sm text-ink-5">한 줄 미리보기</span>
-              <span class="text-sm text-ink-2">{{ previewEnabled ? '활성화 (활동주제 포함)' : '비활성화' }}</span>
+              <span class="text-base text-ink-5">한 줄 미리보기</span>
+              <span class="text-base text-ink-2">{{ previewEnabled ? '활성화 (활동주제 포함)' : '비활성화' }}</span>
             </div>
           </div>
 
           <!-- 면책 안내 박스 -->
           <div class="flex gap-2.5 items-start mt-3.5 mb-6 px-3.5 py-3 border border-amber/30 bg-amber/[0.08] rounded-lg">
-            <span class="text-amber flex-shrink-0 mt-[3px] text-sm inline-flex items-center justify-center w-[22px] h-[22px] border border-amber/30 rounded-full">ℹ</span>
+            <!-- badge: 안내 아이콘 뱃지 --><span class="text-amber flex-shrink-0 mt-[3px] text-sm inline-flex items-center justify-center w-[22px] h-[22px] border border-amber/30 rounded-full">ℹ</span>
             <div class="flex flex-col gap-1.5">
               <p class="m-0 text-base text-ink-2 leading-relaxed">
                 이 파일은 학교생활기록부 작성을 돕기 위한 <strong>참고용 자료</strong>입니다.<br>
                 반드시 <u><strong>담당 선생님께서 내용을 직접 검토</strong></u>하신 후 나이스(NEIS)에 입력해 주시기를
                 부탁드립니다.
               </p>
-              <p class="m-0 text-sm text-ink-4">내보내기를 실행하면 위 안내 사항을 확인하신 것으로 간주합니다.</p>
+              <p class="m-0 text-base text-ink-4">내보내기를 실행하면 위 안내 사항을 확인하신 것으로 간주합니다.</p>
             </div>
           </div>
 
-          <p v-if="exportError" class="text-sm text-red mt-3 m-0">{{ exportError }}</p>
+          <p v-if="exportError" class="text-base text-red mt-3 m-0">{{ exportError }}</p>
 
           <button
               class="px-7 py-2.5 bg-blue/15 border border-blue/40 rounded-lg text-blue-2 text-base font-semibold cursor-pointer transition-[background-color,color] enabled:hover:bg-blue/25 enabled:hover:text-ink-2 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -485,10 +485,10 @@ async function doExport() {
         <div class="flex gap-8">
           <div class="flex flex-col items-center gap-1">
             <span class="text-[28px] font-bold text-blue-2">{{ exportResult.pageCount }}</span>
-            <span class="text-sm text-ink-5">페이지</span>
+            <span class="text-base text-ink-5">페이지</span>
           </div>
         </div>
-        <p class="text-sm text-ink-5 m-0">{{ exportResult.fileName }}</p>
+        <p class="text-base text-ink-5 m-0">{{ exportResult.fileName }}</p>
         <div class="flex gap-2.5 mt-2">
           <button
               class="px-6 py-[9px] bg-blue/[0.12] border border-blue/35 rounded-lg text-blue-2 text-base cursor-pointer transition-[background-color,color] hover:bg-blue/[0.22] hover:text-ink-2"

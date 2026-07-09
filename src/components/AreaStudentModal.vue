@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import {computed, ref, watch} from 'vue'
 import {ChevronDown, ChevronRight, Download, FileSpreadsheet, Users} from 'lucide-vue-next'
 import {Workbook} from 'exceljs'
@@ -338,7 +338,7 @@ async function processFile(file) {
     <!-- ── 리스트 뷰 바디 ─────────────────────────────────── -->
     <div v-if="currentView === 'list'" class="flex-1 overflow-y-auto py-3">
       <div v-if="excelStatus"
-           class="flex items-center gap-1.5 mx-5 mb-1 px-3 py-2 bg-green/[8%] border border-green/20 rounded-lg text-sm">
+           class="flex items-center gap-1.5 mx-5 mb-1 px-3 py-2 bg-green/[8%] border border-green/20 rounded-lg text-base">
         <span class="text-green font-semibold">{{ excelStatus.selected }}명 선택됨</span>
         <span v-if="excelStatus.newlyAdded > 0" class="text-blue-2">
           · {{ excelStatus.newlyAdded }}명 신규 추가됨
@@ -365,9 +365,9 @@ async function processFile(file) {
                   @click.stop
               />
               <span class="text-base font-semibold text-ink-2">{{ g.grade }}학년 {{ g.classNum }}반</span>
-              <span class="text-sm text-ink-4">{{ g.students.length }}명</span>
+              <span class="text-base text-ink-4">{{ g.students.length }}명</span>
               <span v-if="isGroupPartialSelected(g) || isGroupAllSelected(g)"
-                    class="text-sm text-blue-2 bg-blue/[12%] rounded px-1.5 py-px">
+                    class="text-base text-blue-2 bg-blue/[12%] rounded px-1.5 py-px">
                 {{ g.students.filter(s => selectedIds.has(s.id)).length }}명 선택
               </span>
             </div>
@@ -384,7 +384,7 @@ async function processFile(file) {
                   :checked="selectedIds.has(s.id)"
                   @change="toggleStudent(s.id)"
               />
-              <span class="text-sm text-ink-4 w-9 shrink-0">{{ s.number }}번</span>
+              <span class="text-base text-ink-4 w-9 shrink-0">{{ s.number }}번</span>
               <span class="text-base text-ink-2">{{ s.name }}</span>
             </label>
           </div>
@@ -408,7 +408,7 @@ async function processFile(file) {
           <p class="m-0">파일에 <strong class="text-ink-2">학년, 반, 번호, 이름</strong> 열이 포함되어야 합니다.</p>
         </div>
         <button
-            class="flex items-center gap-1.5 py-[7px] px-3 rounded-lg border border-blue/30 bg-blue/[8%] text-blue-2 text-sm cursor-pointer whitespace-nowrap shrink-0 transition-colors hover:bg-blue/15"
+            class="flex items-center gap-1.5 py-[7px] px-3 rounded-lg border border-blue/30 bg-blue/[8%] text-blue-2 text-base cursor-pointer whitespace-nowrap shrink-0 transition-colors hover:bg-blue/15"
             @click="downloadSample"
         >
           <Download :size="14"/>
@@ -416,7 +416,7 @@ async function processFile(file) {
         </button>
       </div>
 
-      <div class="text-sm text-ink-5 bg-blue/[6%] border border-blue/20 rounded-lg px-3.5 py-2.5 leading-[1.7]">
+      <div class="text-base text-ink-5 bg-blue/[6%] border border-blue/20 rounded-lg px-3.5 py-2.5 leading-[1.7]">
         엑셀 파일에 담긴 학생을 <strong class="text-ink-2">{{ area.name }}</strong> 영역에 일괄 배정합니다.
         <span class="text-amber">엑셀 파일 명단에 없는 학생은 이 영역에서 배정 취소됩니다.</span>
       </div>
@@ -441,7 +441,7 @@ async function processFile(file) {
             파일을 여기에 드래그하거나 <span class="text-blue-2 underline">파일 선택</span>
           </template>
         </p>
-        <p v-if="!parsing" class="text-sm text-ink-5 m-0">CSV, XLSX 지원</p>
+        <p v-if="!parsing" class="text-base text-ink-5 m-0">CSV, XLSX 지원</p>
       </div>
 
       <div v-if="excelError"
@@ -455,7 +455,7 @@ async function processFile(file) {
       <span class="text-base text-ink-5">{{ selectedIds.size }}명 선택됨</span>
       <div class="flex gap-2 items-center">
         <template v-if="currentView === 'list'">
-          <p v-if="serverError" class="text-sm text-red m-0 mr-3">{{ serverError }}</p>
+          <p v-if="serverError" class="text-base text-red m-0 mr-3">{{ serverError }}</p>
           <button class="btn-secondary flex items-center gap-1.5" @click="openExcelView">
             <FileSpreadsheet :size="14"/>
             엑셀로 일괄배정
