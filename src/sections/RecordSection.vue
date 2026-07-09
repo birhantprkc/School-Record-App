@@ -313,9 +313,7 @@ async function copyStudentRecord(studentId) {
   const joined = recordStore.gridData.activities
     .map(act => normalizeForCopy(getCellContent(act.id, studentId)))
     .filter(c => c !== '')
-    .join(' ')
-    .replace(/ {2,}/g, ' ')
-    .trim()
+    .join(configStore.exportCSeparator ?? ' ')
   try {
     await navigator.clipboard.writeText(joined)
     markCopied(copiedStudents, studentId)
@@ -650,7 +648,7 @@ function isNewGroup(students, index) {
                 :class="[freezeColumns ? 'sticky z-[2]' : '', previewColLeft, studentRowBgClass(student.id)]"
             >
               <template v-for="(seg, i) in studentPreviewSpans(student.id)" :key="seg.act.id">
-                <span v-if="i > 0"> </span>
+                <span v-if="i > 0" class="whitespace-pre-wrap">{{ configStore.exportCSeparator ?? ' ' }}</span>
                 <span
                     class="act-hl-base cursor-pointer hover:opacity-75 transition-opacity duration-100"
                     :class="getActivityColorClass(seg.act.id)"
