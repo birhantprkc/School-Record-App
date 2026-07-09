@@ -182,14 +182,8 @@ function handleDelete() {
             삭제
           </button>
           <div v-else class="flex items-center gap-2">
-            <button
-                class="px-3 py-1.5 rounded-lg bg-line border-none text-ink-3 cursor-pointer text-base transition-colors hover:bg-line-2"
-                @click="confirmDelete = false"
-            >취소</button>
-            <button
-                class="px-3 py-1.5 rounded-lg bg-red/80 border-none text-white cursor-pointer text-base font-semibold transition-colors hover:bg-red"
-                @click="handleDelete"
-            >영구 삭제</button>
+            <button class="btn-secondary" @click="confirmDelete = false">취소</button>
+            <button class="btn-danger-fill" @click="handleDelete">영구 삭제</button>
           </div>
         </template>
       </div>

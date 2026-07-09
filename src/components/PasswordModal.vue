@@ -180,18 +180,10 @@ function handleCancel() {
       </div>
 
       <div class="flex gap-2.5 justify-end">
-        <button
-            class="py-2.5 px-5 rounded-btn bg-transparent border border-line-2 text-ink-3 text-base cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:bg-line enabled:hover:text-ink"
-            @click="handleCancel"
-            :disabled="loading"
-        >
+        <button class="btn-secondary" @click="handleCancel" :disabled="loading">
           {{ mode === 'unlock' ? '뒤로 가기' : '취소' }}
         </button>
-        <button
-            class="py-2.5 px-6 rounded-btn bg-blue border-none text-white text-base font-medium cursor-pointer flex items-center gap-2 transition-colors min-w-[100px] justify-center disabled:opacity-50 disabled:cursor-not-allowed enabled:hover:bg-blue-2"
-            @click="handleSubmit"
-            :disabled="loading"
-        >
+        <button class="btn-primary" @click="handleSubmit" :disabled="loading">
           <span v-if="loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
           <span v-else>{{ submitLabel }}</span>
         </button>

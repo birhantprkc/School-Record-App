@@ -155,14 +155,8 @@ function handleDelete() {
             삭제
           </button>
           <div v-else class="flex gap-2">
-            <button
-              class="px-[14px] py-2 rounded-lg border border-line bg-transparent text-ink-3 text-base cursor-pointer transition-colors duration-150 hover:bg-line"
-              @click="confirmDelete = false"
-            >취소</button>
-            <button
-              class="btn-delete-confirm px-[14px] py-2 rounded-lg border-none bg-red text-white text-base font-semibold cursor-pointer transition-colors duration-150"
-              @click="handleDelete"
-            >영구 삭제</button>
+            <button class="btn-secondary" @click="confirmDelete = false">취소</button>
+            <button class="btn-danger-fill" @click="handleDelete">영구 삭제</button>
           </div>
         </template>
       </div>
@@ -179,5 +173,4 @@ function handleDelete() {
 
 <style scoped>
 .ui-input::placeholder { color: var(--c-ink-5); }
-.btn-delete-confirm:hover { background-color: color-mix(in srgb, var(--c-red) 80%, #000 20%); }
 </style>

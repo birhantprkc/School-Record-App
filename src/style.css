@@ -224,6 +224,14 @@ code, pre {
 }
 .btn-danger:hover { background-color: color-mix(in srgb, var(--c-red) 18%, transparent); }
 
+.btn-danger-fill {
+  @apply inline-flex items-center gap-1.5 px-5 py-2.5 border-none bg-red text-white;
+  @apply text-base font-semibold cursor-pointer transition-colors duration-150;
+  border-radius: var(--radius-btn);
+}
+.btn-danger-fill:hover:not(:disabled) { background-color: color-mix(in srgb, var(--c-red) 85%, #000 15%); }
+.btn-danger-fill:disabled { @apply opacity-50 cursor-not-allowed; }
+
 /* ── Messages ─────────────────────────────────────── */
 .msg-error {
   @apply px-3.5 py-2.5 rounded-lg text-red text-base;

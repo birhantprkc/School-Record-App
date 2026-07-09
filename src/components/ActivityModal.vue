@@ -106,7 +106,7 @@ function handleDelete() {
             <span class="text-base font-semibold text-red">정말 삭제하시겠습니까?</span>
           </div>
           <p class="text-base text-red/80 m-0 leading-relaxed">
-            이 활동을 삭제하면 이 활동에 속한 <strong class="text-red font-semibold">학생의 생기부 문장과 스냅샷 정보가 모두 삭제</strong>되며, 스냅샷으로도 복구할 수 없습니다.
+            이 활동을 삭제하면 이 활동에 속한 <strong class="text-red font-semibold">모든 학생의 생기부 문장과 스냅샷 정보가 모두 삭제</strong>되며, 스냅샷으로도 복구할 수 없습니다.
           </p>
         </div>
 
@@ -167,14 +167,8 @@ function handleDelete() {
             삭제
           </button>
           <div v-else class="flex items-center gap-2">
-            <button
-                class="px-3 py-1.5 rounded-lg bg-line border-none text-ink-3 cursor-pointer text-base transition-colors hover:bg-line-2"
-                @click="confirmDelete = false"
-            >취소</button>
-            <button
-                class="px-3.5 py-1.5 rounded-lg bg-red/85 border-none text-white cursor-pointer text-base font-semibold transition-colors hover:bg-red"
-                @click="handleDelete"
-            >영구 삭제</button>
+            <button class="btn-secondary" @click="confirmDelete = false">취소</button>
+            <button class="btn-danger-fill" @click="handleDelete">영구 삭제</button>
           </div>
         </template>
       </div>
