@@ -13,6 +13,7 @@ const props = defineProps({
   studentId:  { type: Number, default: null },
   activityName: { type: String, default: '' },
   studentName:  { type: String, default: '' },
+  currentContent: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close'])
@@ -177,6 +178,19 @@ async function saveManualSnapshot() {
       <!-- 히스토리 목록 -->
       <div class="overflow-y-auto px-6 py-4 flex-1 min-h-0 flex flex-col gap-3">
         <p v-if="historyError" class="text-sm text-red bg-red/[8%] border border-red/20 rounded-lg px-3 py-2 m-0">{{ historyError }}</p>
+
+        <!-- 현재 버전 -->
+        <div class="border-2 border-green/50 rounded-btn overflow-hidden shrink-0">
+          <div class="flex items-center gap-2 px-3.5 py-2 bg-green/[0.08] border-b border-green/30">
+            <span class="text-green text-[10px]">●</span>
+            <span class="text-xs font-semibold text-green">현재</span>
+            <span class="text-[11px] text-green/70 bg-green/[0.12] px-[7px] py-px rounded-[4px]">편집 중인 내용</span>
+          </div>
+          <div class="px-3.5 py-2.5 bg-green/[0.04]">
+            <DiffView v-if="viewMode === 'diff'" :before="entries[0]?.content ?? ''" :after="currentContent" />
+            <span v-else class="text-sm leading-relaxed whitespace-pre-wrap break-all text-ink-2">{{ currentContent || '(내용 없음)' }}</span>
+          </div>
+        </div>
 
         <div v-if="entries.length === 0 && !loading && !historyError"
              class="text-sm text-ink-5 text-center py-6">

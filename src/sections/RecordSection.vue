@@ -354,6 +354,7 @@ function openHistory(act, student) {
     studentId: student.id,
     activityName: act.name,
     studentName: student.name,
+    currentContent: getCellContent(act.id, student.id),
   }
 }
 
@@ -679,6 +680,7 @@ function isNewGroup(students, index) {
         :student-id="historyModal.studentId"
         :activity-name="historyModal.activityName"
         :student-name="historyModal.studentName"
+        :current-content="historyModal.currentContent"
         @close="historyModal = null"
     />
   </div>
