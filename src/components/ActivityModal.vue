@@ -94,7 +94,7 @@ function handleDelete() {
               @keydown.enter="submit"
           />
           <p class="text-base text-ink-5 m-0 leading-relaxed">
-            영역(Area) 안에 포함될 세부 활동명입니다.
+            영역(Area) 안에 포함될 세부 활동명입니다. 내보내기 시 이름 순으로 정렬되므로, 출력 순서를 지정하려면 이름 앞에 번호를 붙이세요. (예: 1. 학급자치, 2. 봉사활동)
           </p>
         </div>
 

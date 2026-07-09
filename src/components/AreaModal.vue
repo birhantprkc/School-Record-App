@@ -153,7 +153,11 @@ function handleDelete() {
         <p v-if="allActivities.length === 0" class="text-base text-ink-5 leading-[1.7] m-0">
           등록된 활동이 없습니다.<br>활동 관리에서 먼저 추가하세요.
         </p>
-        <div v-else class="flex flex-wrap content-start gap-2 flex-1 overflow-y-auto pr-1">
+        <template v-else>
+        <p class="text-base text-ink-5 m-0 leading-relaxed">
+          활동은 이름 순으로 정렬됩니다. 순서를 지정하려면 이름 앞에 번호를 붙이세요. (예: 1. 자기소개, 2. 독서활동)
+        </p>
+        <div class="flex flex-wrap content-start gap-2 flex-1 overflow-y-auto pr-1">
           <button
               v-for="act in sortedActivities"
               :key="act.id"
@@ -166,6 +170,7 @@ function handleDelete() {
           >{{ act.name }}
           </button>
         </div>
+        </template>
       </div>
     </div>
 
