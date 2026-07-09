@@ -255,7 +255,7 @@ async function doExport() {
               <span class="text-base font-semibold text-ink">최종 나이스(NEIS) 문장 형식 (추천)</span>
             </div>
             <div class="flex items-center gap-3 mb-2.5" @click.stop>
-              <span class="text-base text-ink-4 whitespace-nowrap">활동 구분</span>
+              <span class="text-base text-ink-4 whitespace-nowrap">활동 구분자</span>
               <select
                   class="text-base text-ink-2 bg-base border border-line rounded-md px-2 py-1 cursor-pointer hover:border-blue/50 focus:outline-none focus:border-blue/60"
                   :value="configStore.exportCSeparatorKey"

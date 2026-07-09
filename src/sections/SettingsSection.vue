@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {ref} from 'vue'
-import {AlertTriangle, KeyRound, Moon, Shield, ShieldOff, Sun} from 'lucide-vue-next'
+import {AlertTriangle, FileOutput, KeyRound, Moon, Shield, ShieldOff, Sun} from 'lucide-vue-next'
 import {useConfigStore} from '../stores/configStore'
 import PasswordModal from '../components/PasswordModal.vue'
 
@@ -117,6 +117,36 @@ async function handlePasswordSubmit(payload) {
             <Sun :size="16"/>
             라이트
           </button>
+        </div>
+      </div>
+
+      <!-- 내보내기 옵션 카드 -->
+      <div class="bg-surface border border-line rounded-2xl p-6 mb-5">
+        <div class="flex items-center gap-4 mb-5">
+          <div class="flex items-center justify-center w-11 h-11 rounded-xl flex-shrink-0 bg-amber/[0.12] border border-amber/30 text-amber">
+            <FileOutput :size="20"/>
+          </div>
+          <div>
+            <h3 class="text-lg font-semibold text-ink m-0">내보내기 옵션</h3>
+            <p class="text-base text-ink-4 m-0">내보내기 형식별 기본 설정입니다.</p>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <p class="text-base font-semibold text-ink-3 m-0">C타입 — 최종 나이스(NEIS) 문장 형식</p>
+          <p class="text-base text-ink-5 m-0 leading-relaxed">학생의 모든 활동 기록을 하나의 문장으로 결합할 때 사용할 구분 문자를 설정합니다.</p>
+          <div class="flex items-center gap-3 mt-1.5">
+            <span class="text-base text-ink-4">활동 구분자</span>
+            <select
+                class="text-base text-ink-2 bg-base border border-line rounded-md px-2 py-1 cursor-pointer hover:border-blue/50 focus:outline-none focus:border-blue/60"
+                :value="config.exportCSeparatorKey"
+                @change="config.setExportCSeparator($event.target.value)"
+            >
+              <option value="space">공백</option>
+              <option value="newline">줄바꿈 (↵)</option>
+              <option value="double_newline">빈 줄 (↵↵)</option>
+            </select>
+          </div>
         </div>
       </div>
 
