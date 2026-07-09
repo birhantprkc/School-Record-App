@@ -70,9 +70,10 @@ const previewItems = computed(() => {
 
 const hasChanges = computed(() => previewItems.value.length > 0)
 
-function commitSearch() {
+async function commitSearch() {
   const q = searchText.value.trim()
   if (!q) return
+  await props.flushPending()
   committedSearch.value = q
   applyError.value = ''
 }
