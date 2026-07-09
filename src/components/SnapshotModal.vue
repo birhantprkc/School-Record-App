@@ -115,14 +115,14 @@ onMounted(loadSnapshots)
                 @keydown.esc.stop="showCreateForm = false; memoInput = ''"
             />
             <button
-                class="py-2.5 px-4 rounded-lg border border-transparent bg-blue/70 text-ink text-base cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-blue/90"
+                class="btn-primary"
                 :disabled="creating"
                 @click="handleCreate"
             >
               {{ creating ? '생성 중...' : '생성' }}
             </button>
             <button
-                class="py-2.5 px-4 rounded-lg border border-line bg-transparent text-ink-2 text-base cursor-pointer whitespace-nowrap hover:bg-line"
+                class="btn-secondary"
                 @click="showCreateForm = false; memoInput = ''"
             >
               취소
