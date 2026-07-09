@@ -96,7 +96,7 @@ onMounted(loadSnapshots)
       <div class="px-6 py-3.5 border-b border-line shrink-0">
         <template v-if="!showCreateForm">
           <button
-              class="flex items-center gap-1.5 py-[7px] px-4 rounded-lg border border-blue/40 bg-blue/[12%] text-blue-2 text-base cursor-pointer hover:bg-blue/[22%]"
+              class="flex items-center gap-1.5 py-2.5 px-4 rounded-lg border border-blue/40 bg-blue/[12%] text-blue-2 text-base cursor-pointer hover:bg-blue/[22%]"
               @click="showCreateForm = true"
           >
             <Plus :size="14"/>
@@ -107,7 +107,7 @@ onMounted(loadSnapshots)
           <div class="flex gap-2 items-center">
             <input
                 v-model="memoInput"
-                class="ui-input flex-1 w-auto py-1.75 px-3 rounded-lg text-base border-line-2 placeholder:text-ink-5"
+                class="ui-input flex-1 w-auto py-[7px] px-3 rounded-lg text-base border-line-2 placeholder:text-ink-5"
                 placeholder="메모 (선택)"
                 maxlength="100"
                 autofocus
