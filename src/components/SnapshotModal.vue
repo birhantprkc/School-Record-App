@@ -96,7 +96,7 @@ onMounted(loadSnapshots)
       <div class="px-6 py-3.5 border-b border-line shrink-0">
         <template v-if="!showCreateForm">
           <button
-              class="flex items-center gap-1.5 py-[7px] px-4 rounded-lg border border-blue/40 bg-blue/[12%] text-blue-2 text-sm cursor-pointer hover:bg-blue/[22%]"
+              class="flex items-center gap-1.5 py-[7px] px-4 rounded-lg border border-blue/40 bg-blue/[12%] text-blue-2 text-base cursor-pointer hover:bg-blue/[22%]"
               @click="showCreateForm = true"
           >
             <Plus :size="14"/>
@@ -107,7 +107,7 @@ onMounted(loadSnapshots)
           <div class="flex gap-2 items-center">
             <input
                 v-model="memoInput"
-                class="ui-input flex-1 w-auto py-[7px] px-3 rounded-lg text-sm border-line-2 placeholder:text-ink-5"
+                class="ui-input flex-1 w-auto py-1.75 px-3 rounded-lg text-base border-line-2 placeholder:text-ink-5"
                 placeholder="메모 (선택)"
                 maxlength="100"
                 autofocus
@@ -115,28 +115,28 @@ onMounted(loadSnapshots)
                 @keydown.esc.stop="showCreateForm = false; memoInput = ''"
             />
             <button
-                class="py-[7px] px-3.5 rounded-lg border-none bg-blue/70 text-ink text-sm cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-blue/90"
+                class="py-2.5 px-4 rounded-lg border border-transparent bg-blue/70 text-ink text-base cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-blue/90"
                 :disabled="creating"
                 @click="handleCreate"
             >
               {{ creating ? '생성 중...' : '생성' }}
             </button>
             <button
-                class="py-[7px] px-3 rounded-lg border border-line bg-transparent text-ink-2 text-sm cursor-pointer whitespace-nowrap hover:bg-line"
+                class="py-2.5 px-4 rounded-lg border border-line bg-transparent text-ink-2 text-base cursor-pointer whitespace-nowrap hover:bg-line"
                 @click="showCreateForm = false; memoInput = ''"
             >
               취소
             </button>
           </div>
-          <p v-if="createError" class="text-xs text-red m-0 mt-1">{{ createError }}</p>
+          <p v-if="createError" class="text-base text-red m-0 mt-1">{{ createError }}</p>
         </template>
       </div>
 
       <!-- 스냅샷 목록 -->
       <div class="overflow-y-auto flex-1 min-h-0 px-4 py-3 flex flex-col gap-2">
-        <div v-if="loading" class="text-sm text-ink-5 text-center py-8">불러오는 중...</div>
-        <div v-else-if="loadError" class="text-sm text-red text-center py-8">{{ loadError }}</div>
-        <div v-else-if="snapshots.length === 0" class="text-sm text-ink-5 text-center py-8">
+        <div v-if="loading" class="text-base text-ink-5 text-center py-8">불러오는 중...</div>
+        <div v-else-if="loadError" class="text-base text-red text-center py-8">{{ loadError }}</div>
+        <div v-else-if="snapshots.length === 0" class="text-base text-ink-5 text-center py-8">
           저장된 스냅샷이 없습니다.
         </div>
 
@@ -144,15 +144,15 @@ onMounted(loadSnapshots)
              class="border border-line rounded-btn overflow-hidden shrink-0">
           <div class="flex items-center gap-2 px-3.5 py-2.5 bg-base border-b border-line">
             <span class="text-blue text-[10px]">●</span>
-            <span class="text-sm text-blue-2">{{ formatDate(snap.created_at) }}</span>
+            <span class="text-base text-blue-2">{{ formatDate(snap.created_at) }}</span>
             <span v-if="snap.memo"
-                  class="text-xs text-amber overflow-hidden text-ellipsis whitespace-nowrap">{{ snap.memo }}</span>
+                  class="text-base text-amber overflow-hidden text-ellipsis whitespace-nowrap">{{ snap.memo }}</span>
           </div>
 
           <div class="flex items-center gap-2 px-3.5 py-2">
             <template v-if="confirmRestoreId !== snap.id">
               <button
-                  class="flex items-center gap-[5px] py-[5px] px-3 rounded-[7px] border border-line-2 bg-transparent text-blue-2 text-xs cursor-pointer hover:bg-line"
+                  class="flex items-center gap-1.25 py-[5px] px-3 rounded-[7px] border border-line-2 bg-transparent text-blue-2 text-base cursor-pointer hover:bg-line"
                   @click="confirmRestoreId = snap.id"
               >
                 <RotateCcw :size="13"/>
@@ -160,19 +160,19 @@ onMounted(loadSnapshots)
               </button>
             </template>
             <template v-else>
-              <span class="text-xs text-amber flex-1">이 시점으로 복원합니다. <strong><u>저장되지 않은 모든 내용이 삭제</u></strong>되고 과거 스냅샷 시점으로 덮어써집니다.</span>
+              <span class="text-base text-amber flex-1">이 시점으로 복원합니다. <strong><u>저장되지 않은 모든 내용이 삭제</u></strong>되고 과거 스냅샷 시점으로 덮어써집니다.</span>
               <button
-                  class="py-[5px] px-3 rounded-[7px] border-none bg-red text-white text-xs cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-red/80"
+                  class="py-[5px] px-3 rounded-[7px] border-none bg-red text-white text-base cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-red/80"
                   :disabled="restoring"
                   @click="handleRestore"
               >
                 {{ restoring ? '복원 중...' : '확인' }}
               </button>
               <button
-                  class="py-[5px] px-3 rounded-[7px] border border-line bg-transparent text-ink-2 text-xs cursor-pointer whitespace-nowrap hover:bg-line"
+                  class="py-[5px] px-3 rounded-[7px] border border-line bg-transparent text-ink-2 text-base cursor-pointer whitespace-nowrap hover:bg-line"
                   @click="confirmRestoreId = null; restoreError = ''"
               >취소</button>
-              <p v-if="restoreError" class="text-xs text-red m-0">{{ restoreError }}</p>
+              <p v-if="restoreError" class="text-base text-red m-0">{{ restoreError }}</p>
             </template>
           </div>
         </div>
