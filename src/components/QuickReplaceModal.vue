@@ -98,8 +98,9 @@ async function applyReplace() {
 <template>
   <BaseModal
     title="빠른 텍스트 교체"
-    max-width="900px"
+    max-width="92vw"
     max-height="88vh"
+    height="88vh"
     @close="emit('close')"
   >
     <div class="quick-replace-body">
