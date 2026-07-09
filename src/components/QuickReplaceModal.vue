@@ -130,7 +130,7 @@ async function applyReplace() {
         </div>
         <button
           class="quick-replace-search-btn"
-          :disabled="!canSearch"
+          :disabled="!canSearch || isApplying"
           @click="commitSearch"
         >
           <Search :size="15" />
