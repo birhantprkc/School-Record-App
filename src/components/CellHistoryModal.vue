@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useRecordStore } from '../stores/record.js'
 import { X } from 'lucide-vue-next'
 import DiffView from './DiffView.vue'
+import { useEscapeKey } from '../composables/useEscapeKey.js'
 
 // 'content' = 버전별 내용 그대로, 'diff' = 직전 버전과의 차이
 const viewMode = ref('content')
@@ -15,6 +16,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+
+useEscapeKey(() => emit('close'))
 
 const recordStore = useRecordStore()
 
@@ -135,7 +138,7 @@ async function saveManualSnapshot() {
                 placeholder="메모를 입력하세요 (필수)"
                 maxlength="100"
                 @keydown.enter="saveManualSnapshot"
-                @keydown.esc="showNoteForm = false"
+                @keydown.esc.stop="showNoteForm = false"
             />
             <button
                 class="py-[7px] px-3.5 rounded-lg border-none bg-blue/70 text-ink text-sm cursor-pointer disabled:opacity-40 disabled:cursor-default enabled:hover:bg-blue/90"

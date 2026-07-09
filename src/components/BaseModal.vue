@@ -1,6 +1,7 @@
 <script setup>
 import { useSlots } from 'vue'
 import { X } from 'lucide-vue-next'
+import { useEscapeKey } from '../composables/useEscapeKey.js'
 
 defineProps({
   title:     { type: String, required: true },
@@ -11,6 +12,8 @@ defineProps({
 
 const emit = defineEmits(['close'])
 const slots = useSlots()
+
+useEscapeKey(() => emit('close'))
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 <script setup>
 import {ref, computed, watch} from 'vue'
 import {Lock, Eye, EyeOff, AlertTriangle} from 'lucide-vue-next'
+import {useEscapeKey} from '../composables/useEscapeKey.js'
 
 const props = defineProps({
   // 'unlock' | 'setup' | 'change'
@@ -10,6 +11,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+useEscapeKey(() => emit('cancel'))
 
 const password = ref('')
 const newPassword = ref('')

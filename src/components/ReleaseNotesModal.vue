@@ -1,11 +1,14 @@
 <script setup>
 import { Sparkles, Wrench, Bug, AlertTriangle } from 'lucide-vue-next'
+import { useEscapeKey } from '../composables/useEscapeKey.js'
 
 defineProps({
   notes: { type: Array, required: true },
 })
 
 const emit = defineEmits(['close'])
+
+useEscapeKey(() => emit('close'))
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 <script setup>
 import {computed, ref} from 'vue'
 import {AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X} from 'lucide-vue-next'
+import {useEscapeKey} from '../composables/useEscapeKey.js'
 import {Workbook} from 'exceljs'
 import * as XLSX from 'xlsx'
 import {useStudentStore} from '../stores/student.js'
@@ -16,6 +17,8 @@ const COL_ALIASES = {
 }
 
 const emit = defineEmits(['close', 'imported'])
+
+useEscapeKey(() => emit('close'))
 
 const studentStore = useStudentStore()
 const fileStore = useFileStore()

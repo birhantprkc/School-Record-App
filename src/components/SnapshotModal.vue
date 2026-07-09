@@ -2,8 +2,11 @@
 import {onMounted, ref} from 'vue'
 import {useSnapshotStore} from '../stores/snapshot.js'
 import {GitBranch, Plus, RotateCcw, X} from 'lucide-vue-next'
+import {useEscapeKey} from '../composables/useEscapeKey.js'
 
 const emit = defineEmits(['close', 'restored'])
+
+useEscapeKey(() => emit('close'))
 
 const snapshotStore = useSnapshotStore()
 
@@ -109,7 +112,7 @@ onMounted(loadSnapshots)
                 maxlength="100"
                 autofocus
                 @keydown.enter="handleCreate"
-                @keydown.esc="showCreateForm = false; memoInput = ''"
+                @keydown.esc.stop="showCreateForm = false; memoInput = ''"
             />
             <button
                 class="py-[7px] px-3.5 rounded-lg border-none bg-blue/70 text-ink text-sm cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-blue/90"
