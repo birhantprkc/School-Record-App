@@ -2,8 +2,8 @@ use crate::commands::crypto::resolve_data_key;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::state::{CryptoStateHandle, DbState};
 use crate::types::{
-    ActivityItem, AreaGridData, BulkImportResult, HistoryEntry, ImportRecordInput,
-    PreviewImportItem, RecordCell, StudentItem,
+    ActivityItem, ActivityRecordItem, AreaGridData, BulkImportResult, HistoryEntry,
+    ImportRecordInput, PreviewImportItem, RecordCell, StudentItem,
 };
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashMap;
@@ -522,6 +522,65 @@ pub fn preview_import_records(
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     let key = resolve_data_key(conn, &crypto)?;
     preview_import_records_impl(conn, &records, key)
+}
+
+pub fn get_activity_records_impl(
+    conn: &Connection,
+    activity_id: i64,
+    key: Option<[u8; 32]>,
+) -> Result<Vec<ActivityRecordItem>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT s.id, s.grade, s.class_num, s.number, s.name, ar.content
+             FROM ActivityRecord ar
+             JOIN Student s ON s.id = ar.student_id
+             WHERE ar.activity_id = ?1
+               AND ar.content != ''
+             ORDER BY s.grade, s.class_num, s.number",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let raw = stmt
+        .query_map(rusqlite::params![activity_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut items = Vec::with_capacity(raw.len());
+    for (student_id, grade, class_num, number, name, content) in raw {
+        items.push(ActivityRecordItem {
+            student_id,
+            grade,
+            class_num,
+            number,
+            student_name: maybe_decrypt(name, key)?,
+            content: maybe_decrypt(content, key)?,
+        });
+    }
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn get_activity_records(
+    activity_id: i64,
+    state: State<DbState>,
+    crypto: State<CryptoStateHandle>,
+) -> Result<Vec<ActivityRecordItem>, String> {
+    let guard = state.0.lock().unwrap();
+    let conn = guard
+        .as_ref()
+        .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
+    let key = resolve_data_key(conn, &crypto)?;
+    get_activity_records_impl(conn, activity_id, key)
 }
 
 pub fn bulk_quick_replace_impl(

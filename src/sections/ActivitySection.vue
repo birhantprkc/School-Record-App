@@ -5,6 +5,7 @@ import {useActivityStore} from '../stores/activity'
 import {useAreaStore} from '../stores/area'
 import ActivityCard from '../components/ActivityCard.vue'
 import ActivityModal from '../components/ActivityModal.vue'
+import ActivityRecordModal from '../components/ActivityRecordModal.vue'
 
 const activityStore = useActivityStore()
 const areaStore = useAreaStore()
@@ -13,12 +14,16 @@ const sortedActivities = computed(() =>
     [...activityStore.activities].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 )
 
-// 모달 상태
+// 편집 모달 상태
 const modalVisible = ref(false)
 const modalMode = ref('add')       // 'add' | 'edit'
 const selectedActivity = ref(null)
 const activityModalRef = ref(null)
 const isSubmitting = ref(false)
+
+// 기록 명단 모달 상태
+const recordModalVisible = ref(false)
+const recordModalActivity = ref(null)
 
 onMounted(() => {
   activityStore.fetchActivities()
@@ -59,6 +64,16 @@ async function handleSaved({name, areaIds}) {
   } finally {
     isSubmitting.value = false
   }
+}
+
+function openRecordModal(activity) {
+  recordModalActivity.value = activity
+  recordModalVisible.value = true
+}
+
+function closeRecordModal() {
+  recordModalVisible.value = false
+  recordModalActivity.value = null
 }
 
 async function handleDeleted() {
@@ -129,12 +144,13 @@ async function handleDeleted() {
               :key="activity.id"
               :activity="activity"
               @edit="openEditModal"
+              @view-records="openRecordModal"
           />
         </div>
       </div>
     </div>
 
-    <!-- 모달 -->
+    <!-- 편집 모달 -->
     <transition name="modal">
       <ActivityModal
           ref="activityModalRef"
@@ -146,6 +162,15 @@ async function handleDeleted() {
           @close="closeModal"
           @saved="handleSaved"
           @deleted="handleDeleted"
+      />
+    </transition>
+
+    <!-- 기록 명단 모달 -->
+    <transition name="modal">
+      <ActivityRecordModal
+          v-if="recordModalVisible && recordModalActivity"
+          :activity="recordModalActivity"
+          @close="closeRecordModal"
       />
     </transition>
   </div>

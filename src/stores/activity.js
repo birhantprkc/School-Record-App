@@ -7,6 +7,11 @@ export const useActivityStore = defineStore('activity', () => {
     const loading = ref(false)
     const error = ref('')
 
+    const activityRecords = ref([])  // ActivityRecordItem[]
+    const recordsLoading = ref(false)
+    const recordsError = ref('')
+    let fetchRecordsGen = 0
+
     async function fetchActivities() {
         loading.value = true
         error.value = ''
@@ -60,5 +65,24 @@ export const useActivityStore = defineStore('activity', () => {
         }
     }
 
-    return {activities, loading, error, fetchActivities, deleteActivity, saveActivity, createActivity}
+    async function fetchActivityRecords(activityId) {
+        const gen = ++fetchRecordsGen
+        recordsLoading.value = true
+        recordsError.value = ''
+        activityRecords.value = []
+        try {
+            const result = await invoke('get_activity_records', {activityId})
+            if (gen === fetchRecordsGen) activityRecords.value = result
+        } catch (e) {
+            if (gen === fetchRecordsGen) recordsError.value = String(e)
+        } finally {
+            if (gen === fetchRecordsGen) recordsLoading.value = false
+        }
+    }
+
+    return {
+        activities, loading, error,
+        fetchActivities, deleteActivity, saveActivity, createActivity,
+        activityRecords, recordsLoading, recordsError, fetchActivityRecords,
+    }
 })

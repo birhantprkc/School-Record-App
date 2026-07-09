@@ -141,6 +141,18 @@ pub struct PreviewImportItem {
     pub existing_content: String,
 }
 
+// ── 활동 기록 명단 관련 ──────────────────────────────────────
+
+#[derive(Serialize, Clone)]
+pub struct ActivityRecordItem {
+    pub student_id: i64,
+    pub grade: i64,
+    pub class_num: i64,
+    pub number: i64,
+    pub student_name: String,
+    pub content: String,
+}
+
 // ── 스냅샷 관련 ──────────────────────────────────────────────
 
 #[derive(Serialize)]

@@ -1,11 +1,12 @@
 ﻿<script setup>
 import {computed} from 'vue'
+import {Users} from 'lucide-vue-next'
 
 const props = defineProps({
   activity: {type: Object, required: true},
 })
 
-const emit = defineEmits(['edit'])
+const emit = defineEmits(['edit', 'view-records'])
 
 const areaBadgeText = computed(() => {
   const count = props.activity.areas.length
@@ -44,10 +45,17 @@ const recordCountEmpty = computed(() => (props.activity.record_count ?? 0) === 0
       <h3 class="text-lg font-bold text-ink m-0 leading-[1.4]">{{ activity.name }}</h3>
     </div>
     <div class="flex items-center justify-between pt-[10px] border-t border-line">
-      <span
-        class="text-base font-medium"
-        :class="recordCountEmpty ? 'text-ink-5' : 'text-ink-3'"
-      >{{ recordCountText }}</span>
+      <button
+        class="inline-flex items-center gap-[5px] px-[10px] py-[5px] rounded-lg border text-base font-medium cursor-pointer transition-colors duration-150"
+        :class="recordCountEmpty
+          ? 'border-line text-ink-5 bg-transparent cursor-default'
+          : 'border-green/25 bg-green/8 text-green hover:bg-green/15 hover:border-green/45'"
+        :disabled="recordCountEmpty"
+        @click.stop="emit('view-records', activity)"
+      >
+        <Users :size="14"/>
+        {{ recordCountText }}
+      </button>
       <span class="text-base text-transparent transition-colors duration-150 group-hover:text-ink-5">편집</span>
     </div>
   </div>

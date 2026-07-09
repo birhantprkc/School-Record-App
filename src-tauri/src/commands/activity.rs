@@ -8,7 +8,7 @@ pub fn get_activities_impl(conn: &Connection) -> Result<Vec<ActivityDetail>, Str
     let mut stmt = conn
         .prepare(
             "SELECT act.id, act.name, a.id AS area_id, a.name AS area_name,
-                    (SELECT COUNT(*) FROM ActivityRecord ar WHERE ar.activity_id = act.id) AS record_count
+                    (SELECT COUNT(*) FROM ActivityRecord ar WHERE ar.activity_id = act.id AND ar.content != '') AS record_count
              FROM Activity act
              LEFT JOIN AreaActivity aa ON act.id = aa.activity_id
              LEFT JOIN Area a ON aa.area_id = a.id

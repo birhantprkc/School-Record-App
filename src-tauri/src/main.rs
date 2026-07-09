@@ -55,6 +55,7 @@ fn main() {
             bulk_import_records,
             preview_import_records,
             bulk_quick_replace,
+            get_activity_records,
             write_bytes_file,
             create_snapshot,
             get_snapshots,

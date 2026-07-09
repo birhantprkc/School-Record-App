@@ -7,6 +7,7 @@ defineProps({
   title:     { type: String, required: true },
   maxWidth:  { type: String, default: '640px' },
   maxHeight: { type: String, default: '85vh' },
+  height:    { type: String, default: null },
   label:     { type: String, default: null },
 })
 
@@ -20,7 +21,7 @@ useEscapeKey(() => emit('close'))
   <Teleport to="body">
     <Transition name="modal">
       <div class="modal-overlay">
-        <div class="modal-container" :style="{ maxWidth, maxHeight }">
+        <div class="modal-container" :style="{ maxWidth, maxHeight, height: height ?? undefined }">
           <div class="modal-hdr" :class="{ 'modal-hdr--top': label }">
             <div v-if="label" class="flex flex-col gap-0.5">
               <span class="text-base font-medium text-ink-3">{{ label }}</span>
