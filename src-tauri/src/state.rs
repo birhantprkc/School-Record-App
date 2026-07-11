@@ -37,7 +37,7 @@ pub fn clear_crypto_state(crypto: &CryptoStateHandle) -> Result<(), String> {
 
 pub struct ReplaceCache {
     pub ruleset_version: u64,
-    pub entries: HashMap<u64, (String, u64)>,
+    pub entries: HashMap<String, (String, u64)>,
 }
 
 pub type ReplaceCacheState = Mutex<ReplaceCache>;

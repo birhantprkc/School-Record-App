@@ -1,6 +1,6 @@
 use crate::engine::{
     apply_rules, apply_rules_cached, detect_conflicts, fetch_rules_from_db,
-    get_records_for_scope, hash_content,
+    get_records_for_scope,
 };
 use crate::state::ReplaceCache;
 use crate::types::ReplaceRule;
@@ -123,8 +123,7 @@ fn test_cached_stores_result() {
     let mut cache = ReplaceCache { ruleset_version: 0, entries: HashMap::new() };
     let rules = vec![make_rule(1, "A", "B", true, 0)];
     let _ = apply_rules_cached("A", &rules, &mut cache);
-    let key = hash_content("A");
-    assert!(cache.entries.contains_key(&key));
+    assert!(cache.entries.contains_key("A"));
 }
 
 #[test]
@@ -205,21 +204,6 @@ fn test_no_conflict_for_regex_rules() {
     assert!(conflicts.is_empty());
 }
 
-// ── hash_content ─────────────────────────────────────────────
-
-#[test]
-fn test_hash_content_deterministic() {
-    let h1 = hash_content("hello");
-    let h2 = hash_content("hello");
-    assert_eq!(h1, h2);
-}
-
-#[test]
-fn test_hash_content_different_inputs() {
-    let h1 = hash_content("hello");
-    let h2 = hash_content("world");
-    assert_ne!(h1, h2);
-}
 
 // ── fetch_rules_from_db ───────────────────────────────────────
 

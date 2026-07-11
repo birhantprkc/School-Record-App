@@ -1,8 +1,6 @@
 use regex::Regex;
 use rusqlite::Connection;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::path::{Component, Path};
 
 use crate::crypto::maybe_decrypt;
@@ -38,12 +36,6 @@ pub fn validate_parent_dir_path(path: &str, missing_parent_message: &str) -> Res
     Ok(())
 }
 
-pub fn hash_content(content: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    content.hash(&mut hasher);
-    hasher.finish()
-}
-
 pub fn apply_rules(content: &str, rules: &[ReplaceRule]) -> String {
     let mut result = content.to_string();
     for rule in rules.iter().filter(|r| r.enabled) {
@@ -63,14 +55,13 @@ pub fn apply_rules_cached(content: &str, rules: &[ReplaceRule], cache: &mut Repl
         return String::new();
     }
     let version = cache.ruleset_version;
-    let key = hash_content(content);
-    if let Some((result, v)) = cache.entries.get(&key) {
+    if let Some((result, v)) = cache.entries.get(content) {
         if *v == version {
             return result.clone();
         }
     }
     let result = apply_rules(content, rules);
-    cache.entries.insert(key, (result.clone(), version));
+    cache.entries.insert(content.to_string(), (result.clone(), version));
     result
 }
 

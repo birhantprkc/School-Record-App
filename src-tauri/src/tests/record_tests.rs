@@ -465,14 +465,14 @@ fn test_bulk_import_student_cache_deduplication() {
 fn test_bulk_import_result_counts() {
     let conn = setup_test_db();
     let act_id = insert_activity(&conn, "발표");
-    insert_student(&conn, 2, 1, 1, "기존학생");
+    insert_student(&conn, 2, 1, 1, ""); // 이름 없는 기존 학생
 
     let result = bulk_import_records_impl(
         &conn,
         &[
             make_import(1, 1, 1, Some("신규1"), act_id, "내용A"),
             make_import(1, 1, 2, Some("신규2"), act_id, "내용B"),
-            make_import(2, 1, 1, Some("기존학생"), act_id, "내용C"),
+            make_import(2, 1, 1, Some("이름채움"), act_id, "내용C"),
         ],
         None,
     )

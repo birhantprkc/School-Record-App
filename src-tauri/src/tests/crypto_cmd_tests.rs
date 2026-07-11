@@ -755,10 +755,10 @@ fn test_apply_replace_with_key_reencrypts_result() {
     let grid = get_area_grid_impl(&conn, area_id, Some(key)).unwrap();
     assert_eq!(grid.records[0].content, "ABC 발표", "치환 후 복호화하면 치환된 원문이어야 한다");
 
-    // 치환 이력도 history에 암호화된 채로 저장되고 복호화 가능해야 한다
+    // 치환 전 원본 content가 history에 암호화된 채로 저장되고 복호화 가능해야 한다
     let history = get_record_history_impl(&conn, act_id, stu_id, 10, 0, Some(key)).unwrap();
     assert!(!history.is_empty(), "치환 적용 시 history가 생성되어야 한다");
-    assert_eq!(history[0].content, "ABC 발표", "history content도 복호화되어야 한다");
+    assert_eq!(history[0].content, "가나다 발표", "history에는 치환 전 원본 content가 저장되어야 한다");
 }
 
 // ── disable_encryption + 빈 이름 학생 회귀 테스트 ─────────────────
@@ -924,11 +924,11 @@ fn test_replace_then_history_roundtrip_with_encryption() {
     let grid = get_area_grid_impl(&conn, area_id, Some(key)).unwrap();
     assert_eq!(grid.records[0].content, "원본 내용 XYZ");
 
-    // apply_replace는 치환 후 새 content를 history에 저장한다.
+    // apply_replace는 치환 전 원본 content를 history에 저장한다.
     // upsert_record_impl만으로는 history가 생성되지 않으므로 항목은 1개여야 한다.
     let history = get_record_history_impl(&conn, act_id, stu_id, 10, 0, Some(key)).unwrap();
     assert_eq!(history.len(), 1, "apply_replace 후 history는 정확히 1개여야 한다");
-    assert_eq!(history[0].content, "원본 내용 XYZ", "history[0]이 복호화된 치환 결과여야 한다");
+    assert_eq!(history[0].content, "원본 내용 ABC", "history[0]에는 치환 전 원본 content가 저장되어야 한다");
 }
 
 #[test]
