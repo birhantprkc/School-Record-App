@@ -160,7 +160,7 @@ onMounted(loadSnapshots)
               </button>
             </template>
             <template v-else>
-              <span class="text-base text-amber flex-1">이 시점으로 복원합니다. <strong><u>저장되지 않은 모든 내용이 삭제</u></strong>되고 과거 스냅샷 시점으로 덮어써집니다.</span>
+              <span class="text-base text-amber flex-1">이 시점으로 복원합니다. <strong><u>스냅샷으로 저장하지 않은 모든 편집 내용이 삭제</u></strong>되고 과거 스냅샷 시점으로 덮어써집니다.</span>
               <button
                   class="py-[5px] px-3 rounded-[7px] border-none bg-red text-white text-base cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default enabled:hover:bg-red/80"
                   :disabled="restoring"
