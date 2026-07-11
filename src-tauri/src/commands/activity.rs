@@ -86,6 +86,42 @@ pub fn delete_activity_impl(conn: &Connection, id: i64) -> Result<(), String> {
     Ok(())
 }
 
+pub fn create_activities_batch_impl(
+    conn: &Connection,
+    names: &[String],
+) -> Result<HashMap<String, i64>, String> {
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    let result = (|| -> Result<(), String> {
+        for name in names {
+            conn.execute(
+                "INSERT OR IGNORE INTO Activity (name) VALUES (?1)",
+                rusqlite::params![name],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string())?,
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+    }
+    let mut map = HashMap::new();
+    for name in names {
+        let id: i64 = conn
+            .query_row(
+                "SELECT id FROM Activity WHERE name = ?1",
+                rusqlite::params![name],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        map.insert(name.clone(), id);
+    }
+    Ok(map)
+}
+
 pub fn set_activity_areas_impl(
     conn: &Connection,
     activity_id: i64,
@@ -153,6 +189,18 @@ pub fn delete_activity(id: i64, state: State<DbState>) -> Result<(), String> {
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     delete_activity_impl(conn, id)
+}
+
+#[tauri::command]
+pub fn create_activities_batch(
+    names: Vec<String>,
+    state: State<DbState>,
+) -> Result<HashMap<String, i64>, String> {
+    let guard = state.0.lock().unwrap();
+    let conn = guard
+        .as_ref()
+        .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
+    create_activities_batch_impl(conn, &names)
 }
 
 #[tauri::command]

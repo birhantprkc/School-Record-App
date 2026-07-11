@@ -557,9 +557,11 @@ async function doImport() {
 
   try {
     const finalMap = {...activityMatchMap.value}
-    for (const [name, id] of Object.entries(finalMap)) {
-      if (id === 0) {
-        finalMap[name] = await activityStore.createActivity(name)
+    const newNames = Object.entries(finalMap).filter(([, id]) => id === 0).map(([name]) => name)
+    if (newNames.length > 0) {
+      const nameToId = await activityStore.createActivitiesBatch(newNames)
+      for (const [name, id] of Object.entries(nameToId)) {
+        finalMap[name] = id
       }
     }
 

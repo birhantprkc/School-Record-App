@@ -50,6 +50,21 @@ export const useActivityStore = defineStore('activity', () => {
         }
     }
 
+    async function createActivitiesBatch(names) {
+        loading.value = true
+        error.value = ''
+        try {
+            const nameToId = await invoke('create_activities_batch', {names})
+            await fetchActivities()
+            return nameToId
+        } catch (e) {
+            error.value = String(e)
+            throw e
+        } finally {
+            loading.value = false
+        }
+    }
+
     async function createActivity(name) {
         loading.value = true
         error.value = ''
@@ -82,7 +97,7 @@ export const useActivityStore = defineStore('activity', () => {
 
     return {
         activities, loading, error,
-        fetchActivities, deleteActivity, saveActivity, createActivity,
+        fetchActivities, deleteActivity, saveActivity, createActivity, createActivitiesBatch,
         activityRecords, recordsLoading, recordsError, fetchActivityRecords,
     }
 })

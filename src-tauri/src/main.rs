@@ -38,6 +38,7 @@ fn main() {
             get_activities,
             set_area_activities,
             create_activity,
+            create_activities_batch,
             update_activity,
             delete_activity,
             set_activity_areas,
