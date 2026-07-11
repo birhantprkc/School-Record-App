@@ -57,9 +57,7 @@ export const useSynonymStore = defineStore('synonym', () => {
   }
 
   async function addWordsBatch(groupId, words) {
-    for (const word of words) {
-      await invoke('add_synonym_word', { groupId, word })
-    }
+    await invoke('add_synonym_words_batch', { groupId, words })
     await fetchGroups()
   }
 

@@ -71,6 +71,7 @@ fn main() {
             create_synonym_group,
             delete_synonym_group,
             add_synonym_word,
+            add_synonym_words_batch,
             delete_synonym_word,
             seed_default_synonyms,
             get_all_records_for_inspect,

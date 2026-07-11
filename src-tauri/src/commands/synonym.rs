@@ -79,6 +79,31 @@ pub fn add_synonym_word_impl(conn: &Connection, group_id: i64, word: &str) -> Re
     Ok(conn.last_insert_rowid())
 }
 
+pub fn add_synonym_words_batch_impl(
+    conn: &Connection,
+    group_id: i64,
+    words: &[String],
+) -> Result<(), String> {
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    let result = (|| -> Result<(), String> {
+        for word in words {
+            conn.execute(
+                "INSERT OR IGNORE INTO SynonymItem (group_id, word) VALUES (?1, ?2)",
+                rusqlite::params![group_id, word],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
 pub fn delete_synonym_word_impl(conn: &Connection, id: i64) -> Result<(), String> {
     conn.execute("DELETE FROM SynonymItem WHERE id = ?1", [id])
         .map_err(|e| e.to_string())?;
@@ -245,6 +270,19 @@ pub fn add_synonym_word(group_id: i64, word: String, state: State<DbState>) -> R
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     add_synonym_word_impl(conn, group_id, &word)
+}
+
+#[tauri::command]
+pub fn add_synonym_words_batch(
+    group_id: i64,
+    words: Vec<String>,
+    state: State<DbState>,
+) -> Result<(), String> {
+    let guard = state.0.lock().unwrap();
+    let conn = guard
+        .as_ref()
+        .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
+    add_synonym_words_batch_impl(conn, group_id, &words)
 }
 
 #[tauri::command]
