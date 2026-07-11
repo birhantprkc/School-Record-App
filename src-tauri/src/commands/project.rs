@@ -44,12 +44,11 @@ pub(crate) fn open_project_impl(
 pub(crate) fn backup_project_impl(db_path_state: &DbPathState) -> Result<(), String> {
     let guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = guard.as_ref().ok_or("DB path not set")?;
-    if let Some(parent) = src.parent() {
-        let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("backup");
-        let ts = chrono::Local::now().format("%y%m%d-%H%M").to_string();
-        let bak_name = format!("{stem}.{ts}.db.backup");
-        std::fs::copy(src, parent.join(&bak_name)).map_err(|e| e.to_string())?;
-    }
+    let parent = src.parent().ok_or("DB 파일의 상위 디렉토리를 찾을 수 없습니다.")?;
+    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("backup");
+    let ts = chrono::Local::now().format("%y%m%d-%H%M").to_string();
+    let bak_name = format!("{stem}.{ts}.db.backup");
+    std::fs::copy(src, parent.join(&bak_name)).map_err(|e| e.to_string())?;
     Ok(())
 }
 
