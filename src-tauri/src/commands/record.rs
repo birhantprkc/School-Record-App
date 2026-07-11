@@ -320,6 +320,7 @@ pub fn bulk_import_records_impl(
                 > 0;
 
             if exists {
+                let mut name_updated = false;
                 if let Some(ref n) = r.name {
                     if !n.is_empty() {
                         let existing_name_raw: String = conn
@@ -337,10 +338,13 @@ pub fn bulk_import_records_impl(
                                 rusqlite::params![stored_name, r.grade, r.class_num, r.number],
                             )
                             .map_err(|e| e.to_string())?;
+                            name_updated = true;
                         }
                     }
                 }
-                students_updated += 1;
+                if name_updated {
+                    students_updated += 1;
+                }
             } else {
                 let name = r.name.as_deref().unwrap_or("이름 없음");
                 let stored_name = maybe_encrypt(name, key)?;
