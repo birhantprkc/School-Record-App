@@ -76,7 +76,17 @@ pub fn add_synonym_word_impl(conn: &Connection, group_id: i64, word: &str) -> Re
         rusqlite::params![group_id, word],
     )
     .map_err(|e| e.to_string())?;
-    Ok(conn.last_insert_rowid())
+
+    if conn.changes() > 0 {
+        return Ok(conn.last_insert_rowid());
+    }
+
+    conn.query_row(
+        "SELECT id FROM SynonymItem WHERE group_id = ?1 AND word = ?2",
+        rusqlite::params![group_id, word],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 pub fn add_synonym_words_batch_impl(
