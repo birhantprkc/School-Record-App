@@ -267,7 +267,7 @@ pub fn save_snapshot_internal(
 
     if inserted == 0 {
         conn.execute(
-            "UPDATE ActivityRecordHistory SET note = ?3
+            "UPDATE ActivityRecordHistory SET note = COALESCE(?3, note)
              WHERE id = (
                  SELECT h.id FROM ActivityRecordHistory h
                  JOIN ActivityRecord r ON r.id = h.activity_record_id
