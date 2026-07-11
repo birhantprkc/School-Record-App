@@ -71,7 +71,7 @@ async function toggleEnabled(rule) {
 async function adjustPriority(rule, delta) {
   if (isAdjusting.value) return
   isAdjusting.value = true
-  const newPriority = rule.priority + delta
+  const newPriority = Math.max(0, rule.priority + delta)
   operationError.value = ''
   try {
     await ruleStore.updateRule(
@@ -371,7 +371,7 @@ onMounted(async () => {
                 <div class="flex flex-row items-center justify-center gap-1">
                   <button
                       class="flex items-center justify-center w-5 h-5 rounded-[3px] border-none bg-transparent text-ink-5 cursor-pointer hover:bg-raised hover:text-ink-4"
-                      :disabled="isAdjusting" @click="adjustPriority(rule, -1)" title="우선순위 높이기"
+                      :disabled="isAdjusting || rule.priority === 0" @click="adjustPriority(rule, -1)" title="우선순위 높이기"
                   >
                     <ChevronLeft :size="14"/>
                   </button>
