@@ -1,4 +1,5 @@
 use crate::commands::crypto::resolve_data_key;
+use crate::commands::record::save_snapshot_internal;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::engine::{
     apply_rules_cached, detect_conflicts, fetch_rules_from_db, get_records_for_scope,
@@ -332,6 +333,8 @@ pub fn apply_replace_impl(
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     let result: Result<(), String> = (|| {
         for (activity_id, student_id, plain_content) in &changes {
+            save_snapshot_internal(conn, *activity_id, *student_id, Some("치환 적용 전"))?;
+
             let stored = maybe_encrypt(plain_content, key)?;
             conn.execute(
                 "INSERT INTO ActivityRecord (activity_id, student_id, content, updated_at)
@@ -340,20 +343,6 @@ pub fn apply_replace_impl(
                    content = excluded.content,
                    updated_at = excluded.updated_at",
                 rusqlite::params![activity_id, student_id, stored],
-            )
-            .map_err(|e| e.to_string())?;
-
-            conn.execute(
-                "INSERT INTO ActivityRecordHistory (activity_record_id, content, changed_at, note)
-                 SELECT r.id, r.content, r.updated_at, '치환 적용'
-                 FROM ActivityRecord r
-                 WHERE r.activity_id = ?1 AND r.student_id = ?2
-                   AND NOT EXISTS (
-                       SELECT 1 FROM ActivityRecordHistory h
-                       WHERE h.activity_record_id = r.id
-                         AND h.changed_at = r.updated_at
-                   )",
-                rusqlite::params![activity_id, student_id],
             )
             .map_err(|e| e.to_string())?;
         }
