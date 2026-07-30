@@ -270,6 +270,9 @@ export const DEFAULT_SYNONYMS: Record<string, string[]> = {
     '할머니',
     '영재학급',
     '영재 학급',
+  ],
+
+  특수문자_기본: [
     '‘',
     '“',
     '’',
