@@ -276,14 +276,13 @@ onMounted(async () => {
             <span class="text-lg font-semibold text-ink-4 uppercase tracking-[0.05em]">치환 규칙 목록</span>
             <div class="flex items-center gap-2">
               <button
-                  class="inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors"
-                  :class="ruleStore.needsRuleUpdate
-                    ? 'bg-blue/30 text-blue-2 ring-1 ring-blue animate-pulse hover:bg-blue/40'
-                    : 'bg-raised text-ink-4 hover:bg-blue/10'"
+                  class="relative inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors bg-raised text-ink-4 hover:bg-blue/10"
                   :disabled="isUpdatingRules"
                   title="새로 추가된 기본 규칙을 반영합니다"
                   @click="onApplyRuleUpdate"
               >
+                <span v-if="ruleStore.needsRuleUpdate"
+                      class="absolute -top-[3px] -right-[3px] w-2 h-2 rounded-full bg-blue ring-2 ring-surface"/>
                 <RefreshCw :size="14" :class="{ 'animate-spin': isUpdatingRules }"/>
                 기본 규칙 갱신
               </button>

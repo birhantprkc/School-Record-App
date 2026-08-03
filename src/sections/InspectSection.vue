@@ -494,14 +494,13 @@ onMounted(() => {
                 그룹 추가
               </button>
               <button
-                  class="inline-flex items-center gap-1.5 py-2 px-4 rounded-lg text-base cursor-pointer transition-colors"
-                  :class="store.needsSynonymUpdate
-                    ? 'bg-blue/30 text-blue-2 ring-1 ring-blue animate-pulse hover:bg-blue/40'
-                    : 'bg-transparent border border-dashed border-line-2 text-ink-5 hover:border-blue hover:text-violet'"
+                  class="relative inline-flex items-center gap-1.5 py-2 px-4 bg-transparent border border-dashed border-line-2 rounded-lg text-ink-5 text-base cursor-pointer transition-[border-color,color] hover:border-blue hover:text-violet"
                   :disabled="isUpdatingSynonyms"
                   title="새로 추가된 기본 유의어 그룹을 반영합니다"
                   @click="onApplySynonymUpdate"
               >
+                <span v-if="store.needsSynonymUpdate"
+                      class="absolute -top-[3px] -right-[3px] w-2 h-2 rounded-full bg-blue ring-2 ring-surface"/>
                 <RefreshCw :size="14" :class="{ 'animate-spin': isUpdatingSynonyms }"/>
                 기본 유의어 갱신
               </button>
@@ -641,9 +640,10 @@ onMounted(() => {
           </button>
         </div>
 
-        <div v-if="inspectResults.length === 0" class="flex flex-col items-center justify-center py-16 gap-3">
-          <ScanSearch :size="40" class="text-ink-5"/>
-          <p class="text-lg font-semibold text-ink-5 m-0">탐지된 유의어가 없습니다</p>
+        <div v-if="inspectResults.length === 0"
+             class="flex flex-col items-center gap-2 py-16 px-[18px] text-center border border-dashed border-green/20 bg-green/[0.03] rounded-lg">
+          <ScanSearch :size="40" class="text-green/40"/>
+          <p class="text-lg font-semibold text-green m-0">탐지된 유의어가 없습니다</p>
           <p class="text-base text-ink-4 m-0">유의어가 발견되지 않았습니다.</p>
         </div>
 

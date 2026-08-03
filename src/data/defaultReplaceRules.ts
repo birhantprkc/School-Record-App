@@ -43,12 +43,12 @@ export const DEFAULT_REPLACE_RULES: DefaultReplaceRule[] = [
   // 전각·CJK 괄호 → 반각
   { oldText: '（', newText: '(', priority: 25 },   // 전각 소괄호
   { oldText: '）', newText: ')', priority: 26 },
-  { oldText: '【', newText: '[', priority: 27 },   // 검정 대괄호
-  { oldText: '】', newText: ']', priority: 28 },
-  { oldText: '〈', newText: '<', priority: 29 },   // 홑꺾쇠
-  { oldText: '〉', newText: '>', priority: 30 },
-  { oldText: '《', newText: '<', priority: 31 },   // 겹꺾쇠
-  { oldText: '》', newText: '>', priority: 32 },
+  { oldText: '【', newText: "'", priority: 27 },   // 검정 대괄호
+  { oldText: '】', newText: "'", priority: 28 },
+  { oldText: '〈', newText: "'", priority: 29 },   // 홑꺾쇠
+  { oldText: '〉', newText: "'", priority: 30 },
+  { oldText: '《', newText: "'", priority: 31 },   // 겹꺾쇠
+  { oldText: '》', newText: "'", priority: 32 },
 
   // 따옴표·인용부호 통일
   { oldText: '‘', newText: "'", priority: 33 },   // 곡선 홑따옴표 (좌)
