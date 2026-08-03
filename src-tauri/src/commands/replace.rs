@@ -125,18 +125,10 @@ pub fn delete_replace_rule_impl(conn: &Connection, id: i64) -> Result<(), String
     Ok(())
 }
 
-pub fn seed_default_replace_rules_impl(
+pub fn apply_default_replace_rules_impl(
     conn: &Connection,
     rules: &[serde_json::Value],
 ) -> Result<(), String> {
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM ReplaceRule", [], |r| r.get(0))
-        .map_err(|e| e.to_string())?;
-
-    if count > 0 {
-        return Ok(());
-    }
-
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     for rule in rules {
         let old_text = rule["oldText"].as_str().ok_or("oldText 누락")?;
@@ -232,7 +224,7 @@ pub fn delete_replace_rule(
 }
 
 #[tauri::command]
-pub fn seed_default_replace_rules(
+pub fn apply_default_replace_rules(
     rules: Vec<serde_json::Value>,
     state: State<DbState>,
     cache: State<ReplaceCacheState>,
@@ -242,7 +234,7 @@ pub fn seed_default_replace_rules(
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
 
-    seed_default_replace_rules_impl(conn, &rules)?;
+    apply_default_replace_rules_impl(conn, &rules)?;
     drop(guard);
     cache.lock().unwrap().ruleset_version += 1;
     Ok(())

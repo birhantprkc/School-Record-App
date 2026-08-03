@@ -9,6 +9,7 @@ import {
   FileDown,
   Loader2,
   Plus,
+  RefreshCw,
   ScanSearch,
   Trash2,
   X,
@@ -63,6 +64,22 @@ async function removeGroup(id) {
     await store.deleteGroup(id)
   } catch (e) {
     removeGroupError.value = String(e)
+  }
+}
+
+// ── 기본 유의어 갱신 ───────────────────────────────────────────
+const isUpdatingSynonyms = ref(false)
+
+async function onApplySynonymUpdate() {
+  if (isUpdatingSynonyms.value) return
+  store.error = ''
+  isUpdatingSynonyms.value = true
+  try {
+    await store.applySynonymUpdate()
+  } catch (e) {
+    store.error = e?.toString() ?? '기본 유의어 갱신 실패'
+  } finally {
+    isUpdatingSynonyms.value = false
   }
 }
 
@@ -468,13 +485,27 @@ onMounted(() => {
               </div>
               <p v-if="addGroupError" class="text-base text-red m-0 mt-1.5">{{ addGroupError }}</p>
             </template>
-            <button v-else
-                    class="inline-flex items-center gap-1.5 py-2 px-4 bg-transparent border border-dashed border-line-2 rounded-lg text-ink-5 text-base cursor-pointer transition-[border-color,color] hover:border-blue hover:text-violet"
-                    @click="showAddGroup = true"
-            >
-              <Plus :size="15"/>
-              그룹 추가
-            </button>
+            <div v-else class="flex items-center gap-2">
+              <button
+                  class="inline-flex items-center gap-1.5 py-2 px-4 bg-transparent border border-dashed border-line-2 rounded-lg text-ink-5 text-base cursor-pointer transition-[border-color,color] hover:border-blue hover:text-violet"
+                  @click="showAddGroup = true"
+              >
+                <Plus :size="15"/>
+                그룹 추가
+              </button>
+              <button
+                  class="inline-flex items-center gap-1.5 py-2 px-4 rounded-lg text-base cursor-pointer transition-colors"
+                  :class="store.needsSynonymUpdate
+                    ? 'bg-blue/30 text-blue-2 ring-1 ring-blue animate-pulse hover:bg-blue/40'
+                    : 'bg-transparent border border-dashed border-line-2 text-ink-5 hover:border-blue hover:text-violet'"
+                  :disabled="isUpdatingSynonyms"
+                  title="새로 추가된 기본 유의어 그룹을 반영합니다"
+                  @click="onApplySynonymUpdate"
+              >
+                <RefreshCw :size="14" :class="{ 'animate-spin': isUpdatingSynonyms }"/>
+                기본 유의어 갱신
+              </button>
+            </div>
           </div>
 
         </template>

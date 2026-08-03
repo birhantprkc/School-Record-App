@@ -120,39 +120,48 @@ pub fn delete_synonym_word_impl(conn: &Connection, id: i64) -> Result<(), String
     Ok(())
 }
 
-pub fn seed_default_synonyms_impl(
+pub fn apply_default_synonyms_impl(
     conn: &Connection,
     groups: &[SeedGroupInput],
 ) -> Result<(), String> {
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM SynonymGroup", [], |r| r.get(0))
-        .map_err(|e| e.to_string())?;
-
-    if count > 0 {
-        return Ok(());
-    }
-
     conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    for group in groups {
-        conn.execute("INSERT INTO SynonymGroup (name) VALUES (?1)", [&group.name])
-            .map_err(|e| {
-                let _ = conn.execute_batch("ROLLBACK");
-                e.to_string()
-            })?;
-        let gid = conn.last_insert_rowid();
-        for word in &group.words {
-            conn.execute(
-                "INSERT OR IGNORE INTO SynonymItem (group_id, word) VALUES (?1, ?2)",
-                rusqlite::params![gid, word],
-            )
-            .map_err(|e| {
-                let _ = conn.execute_batch("ROLLBACK");
-                e.to_string()
-            })?;
+    let result = (|| -> Result<(), String> {
+        for group in groups {
+            let existing_id: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM SynonymGroup WHERE name = ?1",
+                    [&group.name],
+                    |r| r.get(0),
+                )
+                .ok();
+
+            let gid = match existing_id {
+                Some(id) => id,
+                None => {
+                    conn.execute("INSERT INTO SynonymGroup (name) VALUES (?1)", [&group.name])
+                        .map_err(|e| e.to_string())?;
+                    conn.last_insert_rowid()
+                }
+            };
+
+            for word in &group.words {
+                conn.execute(
+                    "INSERT OR IGNORE INTO SynonymItem (group_id, word) VALUES (?1, ?2)",
+                    rusqlite::params![gid, word],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    })();
+
+    match result {
+        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
         }
     }
-    conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 pub fn get_all_records_for_inspect_impl(
@@ -305,7 +314,7 @@ pub fn delete_synonym_word(id: i64, state: State<DbState>) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn seed_default_synonyms(
+pub fn apply_default_synonyms(
     groups: Vec<SeedGroupInput>,
     state: State<DbState>,
 ) -> Result<(), String> {
@@ -313,7 +322,7 @@ pub fn seed_default_synonyms(
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
-    seed_default_synonyms_impl(conn, &groups)
+    apply_default_synonyms_impl(conn, &groups)
 }
 
 #[tauri::command]

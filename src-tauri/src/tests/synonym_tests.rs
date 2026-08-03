@@ -1,7 +1,7 @@
 use crate::commands::synonym::{
-    add_synonym_word_impl, create_synonym_group_impl, delete_synonym_group_impl,
-    delete_synonym_word_impl, get_all_records_for_inspect_impl, get_synonym_groups_impl,
-    seed_default_synonyms_impl,
+    add_synonym_word_impl, apply_default_synonyms_impl, create_synonym_group_impl,
+    delete_synonym_group_impl, delete_synonym_word_impl, get_all_records_for_inspect_impl,
+    get_synonym_groups_impl,
 };
 use crate::types::SeedGroupInput;
 use super::setup_test_db;
@@ -110,17 +110,17 @@ fn test_get_synonym_groups_no_words_returns_empty_items() {
     assert!(groups[0].items.is_empty(), "단어 없는 그룹은 items=[]");
 }
 
-// ── seed_default_synonyms_impl ──────────────────────────────────
+// ── apply_default_synonyms_impl ──────────────────────────────────
 
 #[test]
-fn test_seed_default_synonyms_inserts_when_empty() {
+fn test_apply_default_synonyms_inserts_when_empty() {
     let conn = setup_test_db();
     let groups = vec![
         SeedGroupInput { name: "긍정".to_string(), words: vec!["좋다".to_string(), "훌륭하다".to_string()] },
         SeedGroupInput { name: "부정".to_string(), words: vec!["나쁘다".to_string()] },
     ];
 
-    seed_default_synonyms_impl(&conn, &groups).unwrap();
+    apply_default_synonyms_impl(&conn, &groups).unwrap();
 
     let gc: i64 = conn
         .query_row("SELECT COUNT(*) FROM SynonymGroup", [], |r| r.get(0))
@@ -133,23 +133,49 @@ fn test_seed_default_synonyms_inserts_when_empty() {
 }
 
 #[test]
-fn test_seed_default_synonyms_skips_when_nonempty() {
+fn test_apply_default_synonyms_merges_when_nonempty() {
     let conn = setup_test_db();
     create_synonym_group_impl(&conn, "기존그룹").unwrap();
 
     let groups = vec![
         SeedGroupInput { name: "신규그룹".to_string(), words: vec!["단어".to_string()] },
     ];
-    seed_default_synonyms_impl(&conn, &groups).unwrap();
+    apply_default_synonyms_impl(&conn, &groups).unwrap();
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM SynonymGroup", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(count, 1, "기존 그룹 있으면 seed 무시");
-    let name: String = conn
-        .query_row("SELECT name FROM SynonymGroup", [], |r| r.get(0))
+    assert_eq!(count, 2, "기존 그룹은 유지하고 이름이 다른 신규 기본 그룹은 추가되어야 함");
+    let names: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT name FROM SynonymGroup ORDER BY name").unwrap();
+        stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+    };
+    assert_eq!(names, vec!["기존그룹".to_string(), "신규그룹".to_string()]);
+}
+
+#[test]
+fn test_apply_default_synonyms_adds_missing_word_to_existing_group_by_name() {
+    let conn = setup_test_db();
+    let gid = create_synonym_group_impl(&conn, "긍정").unwrap();
+    add_synonym_word_impl(&conn, gid, "좋다").unwrap();
+
+    let groups = vec![
+        SeedGroupInput { name: "긍정".to_string(), words: vec!["좋다".to_string(), "훌륭하다".to_string()] },
+    ];
+    apply_default_synonyms_impl(&conn, &groups).unwrap();
+
+    let gc: i64 = conn
+        .query_row("SELECT COUNT(*) FROM SynonymGroup", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(name, "기존그룹");
+    assert_eq!(gc, 1, "이름이 같은 그룹은 새로 생기지 않아야 함");
+
+    let words: Vec<String> = {
+        let mut stmt = conn
+            .prepare("SELECT word FROM SynonymItem WHERE group_id = ?1 ORDER BY word")
+            .unwrap();
+        stmt.query_map([gid], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+    };
+    assert_eq!(words, vec!["좋다".to_string(), "훌륭하다".to_string()], "기존 단어는 유지하고 누락된 단어만 추가되어야 함");
 }
 
 // ── get_all_records_for_inspect_impl ───────────────────────────

@@ -5,6 +5,9 @@ export interface DefaultReplaceRule {
   isRegex?: boolean
 }
 
+// DEFAULT_REPLACE_RULES 항목을 추가/변경할 때마다 +1 (기존 사용자의 "기본 규칙 갱신" 버튼이 감지하는 기준값)
+export const DEFAULT_REPLACE_RULES_VERSION = 1
+
 export const DEFAULT_REPLACE_RULES: DefaultReplaceRule[] = [
   // 비가시 문자 제거
   { oldText: '\u00A0', newText: ' ', priority: 0 },    // NBSP

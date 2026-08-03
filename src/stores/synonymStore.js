@@ -1,13 +1,25 @@
 import { defineStore } from 'pinia'
 import { invoke } from '@tauri-apps/api/core'
 import { ref } from 'vue'
-import { DEFAULT_SYNONYMS } from '../data/defaultSynonyms'
+import { DEFAULT_SYNONYMS, DEFAULT_SYNONYMS_VERSION } from '../data/defaultSynonyms'
+
+const SYNONYM_VERSION_KEY = 'synonym_version'
+
+function defaultSynonymGroups() {
+  return Object.entries(DEFAULT_SYNONYMS).map(([name, words]) => ({ name, words }))
+}
 
 export const useSynonymStore = defineStore('synonym', () => {
   const groups = ref([])
   const records = ref([])
   const loading = ref(false)
   const error = ref('')
+  const needsSynonymUpdate = ref(false)
+
+  async function checkSynonymUpdateStatus() {
+    const stored = await invoke('get_config', { key: SYNONYM_VERSION_KEY })
+    needsSynonymUpdate.value = stored !== String(DEFAULT_SYNONYMS_VERSION)
+  }
 
   async function fetchGroups() {
     loading.value = true
@@ -15,18 +27,25 @@ export const useSynonymStore = defineStore('synonym', () => {
     try {
       const fetched = await invoke('get_synonym_groups')
       if (fetched.length === 0) {
-        await invoke('seed_default_synonyms', {
-          groups: Object.entries(DEFAULT_SYNONYMS).map(([name, words]) => ({ name, words })),
-        })
+        await invoke('apply_default_synonyms', { groups: defaultSynonymGroups() })
+        await invoke('set_config', { key: SYNONYM_VERSION_KEY, value: String(DEFAULT_SYNONYMS_VERSION) })
         groups.value = await invoke('get_synonym_groups')
       } else {
         groups.value = fetched
       }
+      await checkSynonymUpdateStatus()
     } catch (e) {
       error.value = String(e)
     } finally {
       loading.value = false
     }
+  }
+
+  async function applySynonymUpdate() {
+    await invoke('apply_default_synonyms', { groups: defaultSynonymGroups() })
+    await invoke('set_config', { key: SYNONYM_VERSION_KEY, value: String(DEFAULT_SYNONYMS_VERSION) })
+    needsSynonymUpdate.value = false
+    await fetchGroups()
   }
 
   async function fetchRecords(scopeType = 'all', areaIds = []) {
@@ -71,7 +90,9 @@ export const useSynonymStore = defineStore('synonym', () => {
     records,
     loading,
     error,
+    needsSynonymUpdate,
     fetchGroups,
+    applySynonymUpdate,
     fetchRecords,
     createGroup,
     deleteGroup,

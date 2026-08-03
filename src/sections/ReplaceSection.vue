@@ -11,6 +11,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RefreshCw,
   SearchX,
   Trash2,
   TriangleAlert,
@@ -90,6 +91,22 @@ async function deleteRule(id) {
     await ruleStore.deleteRule(id)
   } catch (e) {
     operationError.value = e?.toString() ?? '삭제 실패'
+  }
+}
+
+// ── 기본 규칙 갱신 ───────────────────────────────────────────
+const isUpdatingRules = ref(false)
+
+async function onApplyRuleUpdate() {
+  if (isUpdatingRules.value) return
+  operationError.value = ''
+  isUpdatingRules.value = true
+  try {
+    await ruleStore.applyRuleUpdate()
+  } catch (e) {
+    operationError.value = e?.toString() ?? '기본 규칙 갱신 실패'
+  } finally {
+    isUpdatingRules.value = false
   }
 }
 
@@ -257,13 +274,27 @@ onMounted(async () => {
         <div class="bg-surface border border-line rounded-[10px] p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-lg font-semibold text-ink-4 uppercase tracking-[0.05em]">치환 규칙 목록</span>
-            <button
-                class="inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors bg-blue/20 text-blue-2 hover:bg-blue/[0.35]"
-                @click="showAddForm = !showAddForm"
-            >
-              <Plus :size="14"/>
-              규칙 추가
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                  class="inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors"
+                  :class="ruleStore.needsRuleUpdate
+                    ? 'bg-blue/30 text-blue-2 ring-1 ring-blue animate-pulse hover:bg-blue/40'
+                    : 'bg-raised text-ink-4 hover:bg-blue/10'"
+                  :disabled="isUpdatingRules"
+                  title="새로 추가된 기본 규칙을 반영합니다"
+                  @click="onApplyRuleUpdate"
+              >
+                <RefreshCw :size="14" :class="{ 'animate-spin': isUpdatingRules }"/>
+                기본 규칙 갱신
+              </button>
+              <button
+                  class="inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors bg-blue/20 text-blue-2 hover:bg-blue/[0.35]"
+                  @click="showAddForm = !showAddForm"
+              >
+                <Plus :size="14"/>
+                규칙 추가
+              </button>
+            </div>
           </div>
 
           <!-- 추가 폼 -->

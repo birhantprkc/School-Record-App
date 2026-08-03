@@ -1,3 +1,6 @@
+// DEFAULT_SYNONYMS에 그룹/단어를 추가·변경할 때마다 +1 (기존 사용자의 "기본 유의어 갱신" 버튼이 감지하는 기준값)
+export const DEFAULT_SYNONYMS_VERSION = 1
+
 export const DEFAULT_SYNONYMS: Record<string, string[]> = {
   유의어_기본: [
     'TOEIC',

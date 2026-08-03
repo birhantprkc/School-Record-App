@@ -1,6 +1,6 @@
 use crate::commands::replace::{
-    create_replace_rule_db, delete_replace_rule_impl, get_replace_rules_impl,
-    seed_default_replace_rules_impl, update_replace_rule_db, validate_replace_rule,
+    apply_default_replace_rules_impl, create_replace_rule_db, delete_replace_rule_impl,
+    get_replace_rules_impl, update_replace_rule_db, validate_replace_rule,
 };
 use crate::engine::{apply_rules, fetch_rules_from_db, get_records_for_scope};
 use super::{insert_activity, insert_record, insert_student, setup_test_db};
@@ -131,14 +131,14 @@ fn test_delete_rule_removes_from_db() {
 }
 
 #[test]
-fn test_seed_default_rules_inserts_when_empty() {
+fn test_apply_default_rules_inserts_when_empty() {
     let conn = setup_test_db();
     let rules = vec![
         serde_json::json!({"oldText": "hello", "newText": "world", "priority": 0, "isRegex": false}),
         serde_json::json!({"oldText": "foo", "newText": "bar", "priority": 1, "isRegex": false}),
     ];
 
-    seed_default_replace_rules_impl(&conn, &rules).unwrap();
+    apply_default_replace_rules_impl(&conn, &rules).unwrap();
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM ReplaceRule", [], |r| r.get(0))
@@ -225,21 +225,37 @@ fn test_update_replace_rule_negative_priority_violates_check() {
 }
 
 #[test]
-fn test_seed_default_rules_skips_when_nonempty() {
+fn test_apply_default_rules_merges_when_nonempty() {
     let conn = setup_test_db();
     create_replace_rule_db(&conn, "existing", "rule", false, 0).unwrap();
 
-    let seed_rules = vec![
+    let default_rules = vec![
         serde_json::json!({"oldText": "hello", "newText": "world", "priority": 0, "isRegex": false}),
     ];
-    seed_default_replace_rules_impl(&conn, &seed_rules).unwrap();
+    apply_default_replace_rules_impl(&conn, &default_rules).unwrap();
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM ReplaceRule", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(count, 1, "기존 규칙 있으면 seed 무시");
+    assert_eq!(count, 2, "기존 규칙은 유지하고 누락된 기본 규칙만 추가되어야 함");
     let old_text: String = conn
-        .query_row("SELECT old_text FROM ReplaceRule", [], |r| r.get(0))
+        .query_row("SELECT old_text FROM ReplaceRule WHERE priority = 0 AND new_text = 'rule'", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(old_text, "existing");
+    assert_eq!(old_text, "existing", "기존 커스텀 규칙이 그대로 남아있어야 함");
+}
+
+#[test]
+fn test_apply_default_rules_does_not_duplicate_existing_default() {
+    let conn = setup_test_db();
+    create_replace_rule_db(&conn, "hello", "world", false, 0).unwrap();
+
+    let default_rules = vec![
+        serde_json::json!({"oldText": "hello", "newText": "world", "priority": 0, "isRegex": false}),
+    ];
+    apply_default_replace_rules_impl(&conn, &default_rules).unwrap();
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM ReplaceRule", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1, "old_text+new_text가 동일한 기본 규칙은 중복 삽입되지 않아야 함");
 }
