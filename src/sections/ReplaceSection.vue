@@ -276,7 +276,7 @@ onMounted(async () => {
             <span class="text-lg font-semibold text-ink-4 uppercase tracking-[0.05em]">치환 규칙 목록</span>
             <div class="flex items-center gap-2">
               <button
-                  class="relative inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors bg-raised text-ink-4 hover:bg-blue/10"
+                  class="relative inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border border-line-2 text-base cursor-pointer transition-colors bg-raised text-ink-4 hover:bg-blue/10 hover:border-blue/40"
                   :disabled="isUpdatingRules"
                   title="새로 추가된 기본 규칙을 반영합니다"
                   @click="onApplyRuleUpdate"
@@ -287,7 +287,7 @@ onMounted(async () => {
                 기본 규칙 갱신
               </button>
               <button
-                  class="inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border-none text-base cursor-pointer transition-colors bg-blue/20 text-blue-2 hover:bg-blue/[0.35]"
+                  class="inline-flex items-center gap-[5px] py-1.5 px-3 rounded-[6px] border border-blue/30 text-base cursor-pointer transition-colors bg-blue/20 text-blue-2 hover:bg-blue/[0.35]"
                   @click="showAddForm = !showAddForm"
               >
                 <Plus :size="14"/>
