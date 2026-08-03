@@ -35,7 +35,7 @@ const activityMap = computed(() => {
   return m
 })
 
-const canSearch  = computed(() => searchText.value.trim().length > 0)
+const canSearch  = computed(() => searchText.value.length > 0)
 const hasPreview = computed(() => committedSearch.value.length > 0)
 
 // 매칭 여부만 판단 — committedSearch가 바뀔 때만 재계산
@@ -71,7 +71,7 @@ const previewItems = computed(() => {
 const hasChanges = computed(() => previewItems.value.length > 0)
 
 async function commitSearch() {
-  const q = searchText.value.trim()
+  const q = searchText.value
   if (!q) return
   await props.flushPending()
   committedSearch.value = q
@@ -79,7 +79,7 @@ async function commitSearch() {
 }
 
 async function applyReplace() {
-  if (!hasPreview.value || !hasChanges.value || isApplying.value) return
+  if (!committedSearch.value || !hasPreview.value || !hasChanges.value || isApplying.value) return
   isApplying.value = true
   applyError.value = ''
   try {
@@ -111,7 +111,7 @@ async function applyReplace() {
           <input
             v-model="searchText"
             class="quick-replace-input"
-            placeholder="공백 불가"
+            placeholder="공백 포함 가능"
             autocomplete="off"
             spellcheck="false"
             :disabled="isApplying"
