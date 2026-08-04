@@ -154,6 +154,14 @@ function isSelected(id) {
   return selectedGroupIds.value.includes(id)
 }
 
+const isAllSelected = computed(() =>
+    store.groups.length > 0 && selectedGroupIds.value.length === store.groups.length,
+)
+
+function toggleAllGroups() {
+  selectedGroupIds.value = isAllSelected.value ? [] : store.groups.map((g) => g.id)
+}
+
 const selectedWordCount = computed(() => {
   const wordSet = new Set()
   for (const g of store.groups) {
@@ -512,8 +520,20 @@ onMounted(() => {
 
       <!-- ─── Step 2: 그룹 선택 ─────────────────────────────── -->
       <div v-if="step === 2">
-        <h3 class="text-lg font-bold text-ink m-0 mb-1.5">Step 2. 점검할 그룹 선택</h3>
-        <p class="text-base text-ink-5 m-0 mb-6">검색에 사용할 유의어 그룹을 하나 이상 선택하세요.</p>
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <h3 class="text-lg font-bold text-ink m-0 mb-1.5">Step 2. 점검할 그룹 선택</h3>
+            <p class="text-base text-ink-5 m-0">검색에 사용할 유의어 그룹을 하나 이상 선택하세요.</p>
+          </div>
+          <button
+              class="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-[6px] border border-line-2 text-base cursor-pointer whitespace-nowrap shrink-0 transition-colors bg-raised text-ink-4 hover:bg-blue/10"
+              :disabled="store.groups.length === 0"
+              @click="toggleAllGroups"
+          >
+            <Check :size="14"/>
+            {{ isAllSelected ? '전체 해제' : '전체 선택' }}
+          </button>
+        </div>
 
         <div class="flex flex-col gap-2 mb-5">
           <label
