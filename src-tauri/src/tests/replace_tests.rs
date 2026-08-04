@@ -202,6 +202,48 @@ fn test_preview_replace_with_regex() {
     assert_eq!(result, "줄바꿈 테스트");
 }
 
+#[test]
+fn test_apply_rules_invisible_chars_regex_class() {
+    use crate::types::ReplaceRule;
+    let rule = ReplaceRule {
+        id: 1,
+        old_text: "[\u{200B}\u{200C}\u{200D}\u{FEFF}]".to_string(),
+        new_text: "".to_string(),
+        is_regex: true,
+        enabled: true,
+        priority: 0,
+        created_at: String::new(),
+        updated_at: String::new(),
+        conflicts: vec![],
+    };
+    let input = format!("가{}나{}다{}라{}", '\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}');
+    let result = apply_rules(&input, &[rule]);
+    assert_eq!(result, "가나다라");
+}
+
+#[test]
+fn test_apply_rules_repeated_punctuation_regex() {
+    use crate::types::ReplaceRule;
+    fn regex_rule(pattern: &str, replacement: &str) -> ReplaceRule {
+        ReplaceRule {
+            id: 1,
+            old_text: pattern.to_string(),
+            new_text: replacement.to_string(),
+            is_regex: true,
+            enabled: true,
+            priority: 0,
+            created_at: String::new(),
+            updated_at: String::new(),
+            conflicts: vec![],
+        }
+    }
+
+    assert_eq!(apply_rules("정말....대단해", &[regex_rule(r"\.{2,}", ".")]), "정말.대단해");
+    assert_eq!(apply_rules("정말!!!대단해", &[regex_rule(r"!{2,}", "!")]), "정말!대단해");
+    assert_eq!(apply_rules("진짜???뭐야", &[regex_rule(r"\?{2,}", "?")]), "진짜?뭐야");
+    assert_eq!(apply_rules("하나,,둘", &[regex_rule(r",{2,}", ",")]), "하나,둘");
+}
+
 // ── CHECK 제약 검증 ────────────────────────────────────────────
 
 #[test]
