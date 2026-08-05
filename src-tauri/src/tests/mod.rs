@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 pub mod engine_tests;
 pub mod db_tests;
+pub mod schema_lock_tests;
 pub mod project_tests;
 pub mod area_tests;
 pub mod activity_tests;
