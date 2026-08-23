@@ -3,8 +3,10 @@ name: "CI"
 on:
   pull_request:
   push:
+    # '**'는 슬래시가 포함된 이름(dependabot/...)까지 포함한 모든 브랜치를 뜻한다.
+    # 태그 push에는 반응하지 않는다.
     branches:
-      - dev
+      - '**'
 
 jobs:
   ci:
