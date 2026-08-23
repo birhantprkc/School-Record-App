@@ -13,6 +13,7 @@ const configStore = useConfigStore()
 
 const selectedAreaId = ref(null)
 const loadError = ref('')
+const rootEl = ref(null)
 
 // 툴바 토글은 configStore(APP_CONFIGS)에 저장되어 재진입/재시작 후에도 유지된다.
 const freezeColumns = computed(() => configStore.recordToolbar.freezeColumns)
@@ -64,6 +65,11 @@ const debounceTimers = new Map()
 const showQuickReplace = ref(false)
 
 onMounted(async () => {
+  // await보다 먼저 붙여, 첫 렌더 이후의 폭 변화를 놓치지 않게 한다.
+  if (rootEl.value) {
+    resizeObserver = new ResizeObserver(onRootResize)
+    resizeObserver.observe(rootEl.value)
+  }
   await areaStore.fetchAreas()
 })
 
@@ -72,7 +78,10 @@ function clearAllTimers() {
   debounceTimers.clear()
 }
 
-onBeforeUnmount(clearAllTimers)
+onBeforeUnmount(() => {
+  clearAllTimers()
+  stopObservingResize()
+})
 
 async function reloadGrid(id) {
   await recordStore.fetchAreaGrid(id)
@@ -221,6 +230,33 @@ watch(
     ],
     resyncHeights
 )
+
+// 창(또는 사이드바) 폭이 바뀌면 줄바꿈 위치가 달라져 기존 셀 높이가 어긋난다.
+// 리사이즈 도중에는 매 프레임 콜백이 오므로, 크기 변경이 멈춘 뒤 1회만 재계산한다.
+const RESIZE_SETTLE_MS = 150
+let resizeObserver = null
+let resizeTimer = null
+let lastObservedWidth = -1
+
+function onRootResize(entries) {
+  const width = entries[0].contentRect.width
+  // 세로만 변한 경우(알림 배너 표시 등)는 줄바꿈에 영향이 없다.
+  if (width === lastObservedWidth) return
+  const isInitialCallback = lastObservedWidth < 0
+  lastObservedWidth = width
+  // 관찰 시작 직후 오는 첫 콜백은 초기 렌더와 중복이므로 건너뛴다.
+  if (isInitialCallback) return
+
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(resyncHeights, RESIZE_SETTLE_MS)
+}
+
+function stopObservingResize() {
+  clearTimeout(resizeTimer)
+  resizeTimer = null
+  resizeObserver?.disconnect()
+  resizeObserver = null
+}
 
 async function toggleCompactCell() {
   await setToolbarOption('compactCell', !compactCell.value)
@@ -454,7 +490,7 @@ function isNewGroup(students, index) {
 </script>
 
 <template>
-  <div class="h-full" :style="{ '--cell-fs': configStore.recordCellFontSize + 'px' }">
+  <div ref="rootEl" class="h-full" :style="{ '--cell-fs': configStore.recordCellFontSize + 'px' }">
     <div
         class="flex flex-col box-border"
         :class="freezeColumns ? 'h-full overflow-hidden' : ''"
