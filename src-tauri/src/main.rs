@@ -77,6 +77,7 @@ fn main() {
             apply_default_synonyms,
             get_all_records_for_inspect,
             get_config,
+            get_configs,
             set_config,
             check_and_update_app_version,
             get_encryption_status,

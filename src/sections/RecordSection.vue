@@ -13,13 +13,29 @@ const configStore = useConfigStore()
 
 const selectedAreaId = ref(null)
 const loadError = ref('')
-const freezeColumns = ref(true)
-const smartScroll = ref(true)
-const compactCell = ref(true)
-const highlightEmpty = ref(false)
-const showPreview = ref(false)
-const collapsePersonalInfo = ref(false)
+
+// 툴바 토글은 configStore(APP_CONFIGS)에 저장되어 재진입/재시작 후에도 유지된다.
+const freezeColumns = computed(() => configStore.recordToolbar.freezeColumns)
+const smartScroll = computed(() => configStore.recordToolbar.smartScroll)
+const compactCell = computed(() => configStore.recordToolbar.compactCell)
+const highlightEmpty = computed(() => configStore.recordToolbar.highlightEmpty)
+const showPreview = computed(() => configStore.recordToolbar.showPreview)
+const collapsePersonalInfo = computed(() => configStore.recordToolbar.collapsePersonalInfo)
 const collapsedActivities = ref(new Set())
+
+const settingError = ref('')
+
+// 토글 저장 실패를 사용자에게 알린다. 저장에 성공했을 때만 true.
+async function setToolbarOption(name, value) {
+  settingError.value = ''
+  try {
+    await configStore.setRecordToolbarOption(name, value)
+    return true
+  } catch (e) {
+    settingError.value = `설정을 저장하지 못했습니다: ${e}`
+    return false
+  }
+}
 
 const FONT_SIZE_MIN = 10
 const FONT_SIZE_MAX = 28
@@ -159,7 +175,7 @@ function syncAllRows() {
 }
 
 async function toggleCompactCell() {
-  compactCell.value = !compactCell.value
+  if (!await setToolbarOption('compactCell', !compactCell.value)) return
   await nextTick()
   if (compactCell.value) {
     document.querySelectorAll('.cell-input').forEach(el => { el.style.height = '' })
@@ -355,9 +371,10 @@ function studentPreviewSpans(studentId) {
 }
 
 async function togglePreview() {
-  showPreview.value = !showPreview.value
+  if (!await setToolbarOption('showPreview', !showPreview.value)) return
+  // 미리보기 열은 셀 높이가 자동일 때만 행 높이가 맞으므로 함께 해제한다.
   if (showPreview.value && compactCell.value) {
-    compactCell.value = false
+    if (!await setToolbarOption('compactCell', false)) return
   }
   if (!compactCell.value) {
     await nextTick()
@@ -438,7 +455,7 @@ function isNewGroup(students, index) {
               class="toolbar-btn"
               :class="freezeColumns ? 'text-blue-2 border-blue/30 bg-blue/[0.08]' : 'text-ink-3 border-line'"
               title="틀고정 켜기/끄기"
-              @click="freezeColumns = !freezeColumns"
+              @click="setToolbarOption('freezeColumns', !freezeColumns)"
           >
             <Pin v-if="freezeColumns" :size="15"/>
             <PinOff v-else :size="15"/>
@@ -449,7 +466,7 @@ function isNewGroup(students, index) {
               class="toolbar-btn"
               :class="smartScroll ? 'text-blue-2 border-blue/30 bg-blue/[0.08]' : 'text-ink-3 border-line'"
               title="스마트 스크롤: 활동 영역에서 휠 → 좌우 스크롤"
-              @click="smartScroll = !smartScroll"
+              @click="setToolbarOption('smartScroll', !smartScroll)"
           >
             <ArrowLeftRight v-if="smartScroll" :size="15"/>
             <ArrowUpDown v-else :size="15"/>
@@ -471,7 +488,7 @@ function isNewGroup(students, index) {
               class="toolbar-btn"
               :class="highlightEmpty ? 'text-amber border-amber/30 bg-amber/[0.08]' : 'text-ink-3 border-line'"
               title="기록이 없는 학생 행 강조 켜기/끄기"
-              @click="highlightEmpty = !highlightEmpty"
+              @click="setToolbarOption('highlightEmpty', !highlightEmpty)"
           >
             <CircleAlert v-if="highlightEmpty" :size="15"/>
             <Circle v-else :size="15"/>
@@ -507,6 +524,14 @@ function isNewGroup(students, index) {
             <Moon v-else :size="15"/>
           </button>
         </div>
+      </div>
+
+      <!-- 설정 저장/로드 실패 알림 -->
+      <div
+          v-if="settingError || configStore.preferencesError"
+          class="px-6 py-2 border-b border-line-2 shrink-0 bg-amber/[0.08]"
+      >
+        <p class="text-base text-amber m-0">{{ settingError || configStore.preferencesError }}</p>
       </div>
 
       <!-- 빈 상태: 영역 미선택 -->
@@ -550,21 +575,21 @@ function isNewGroup(students, index) {
                 class="th-fixed text-[13px] font-semibold text-ink-2 bg-base py-2.5 px-[5px] border-b border-line border-r border-line whitespace-nowrap text-center tracking-[0.03em] w-12 min-w-12 max-w-12 left-0 cursor-pointer select-none underline hover:bg-surface"
                 :class="freezeColumns ? 'sticky top-0 z-[5]' : ''"
                 title="클릭하여 학년·반·번호 숨기기"
-                @click="collapsePersonalInfo = true"
+                @click="setToolbarOption('collapsePersonalInfo', true)"
             >학년</th>
             <th
                 v-if="!collapsePersonalInfo"
                 class="th-fixed text-[13px] font-semibold text-ink-2 bg-base py-2.5 px-[5px] border-b border-line border-r border-line whitespace-nowrap text-center tracking-[0.03em] w-12 min-w-12 max-w-12 left-48px cursor-pointer select-none underline hover:bg-surface"
                 :class="freezeColumns ? 'sticky top-0 z-[5]' : ''"
                 title="클릭하여 학년·반·번호 숨기기"
-                @click="collapsePersonalInfo = true"
+                @click="setToolbarOption('collapsePersonalInfo', true)"
             >반</th>
             <th
                 v-if="!collapsePersonalInfo"
                 class="th-fixed text-[13px] font-semibold text-ink-2 bg-base py-2.5 px-[5px] border-b border-line border-r border-line whitespace-nowrap text-center tracking-[0.03em] w-12 min-w-12 max-w-12 left-96px cursor-pointer select-none underline hover:bg-surface"
                 :class="freezeColumns ? 'sticky top-0 z-[5]' : ''"
                 title="클릭하여 학년·반·번호 숨기기"
-                @click="collapsePersonalInfo = true"
+                @click="setToolbarOption('collapsePersonalInfo', true)"
             >번호</th>
             <th
                 class="th-fixed text-[13px] font-semibold bg-base py-2.5 px-2.5 border-b border-line border-r border-line whitespace-nowrap text-center tracking-[0.03em] w-[100px] min-w-[100px] max-w-[100px]"
@@ -576,7 +601,7 @@ function isNewGroup(students, index) {
                     : 'text-ink-2'
                 ]"
                 :title="collapsePersonalInfo ? '학년·반·번호 숨김 — 클릭하여 복원' : ''"
-                @click="collapsePersonalInfo = false"
+                @click="setToolbarOption('collapsePersonalInfo', false)"
             >
               <span class="flex items-center justify-center gap-1">
                 <ChevronsRight v-if="collapsePersonalInfo" :size="13" class="shrink-0"/>

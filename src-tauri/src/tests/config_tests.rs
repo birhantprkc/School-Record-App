@@ -1,4 +1,4 @@
-use crate::commands::config::{get_config_impl, set_config_impl, check_and_update_app_version_impl};
+use crate::commands::config::{get_config_impl, get_configs_impl, set_config_impl, check_and_update_app_version_impl};
 use super::setup_test_db;
 
 #[test]
@@ -163,4 +163,77 @@ fn test_version_empty_string_stored_returns_empty_and_updates_db() {
     assert_eq!(result, Some("".to_string()));
     let stored = get_config_impl(&conn, "app_version").unwrap();
     assert_eq!(stored, Some("0.2.13".to_string()));
+}
+
+// ── get_configs_impl ────────────────────────────────────────────
+
+fn keys(list: &[&str]) -> Vec<String> {
+    list.iter().map(|k| k.to_string()).collect()
+}
+
+#[test]
+fn test_get_configs_returns_only_requested_keys() {
+    let conn = setup_test_db();
+    set_config_impl(&conn, "record_freeze_columns", "1").unwrap();
+    set_config_impl(&conn, "record_show_preview", "0").unwrap();
+    // 요청하지 않은 키(암호화 salt 등)는 절대 포함되면 안 된다.
+    set_config_impl(&conn, "pbkdf2_salt", "secret").unwrap();
+
+    let result = get_configs_impl(&conn, &keys(&["record_freeze_columns", "record_show_preview"])).unwrap();
+    assert_eq!(result.len(), 2);
+    assert_eq!(result.get("record_freeze_columns"), Some(&"1".to_string()));
+    assert_eq!(result.get("record_show_preview"), Some(&"0".to_string()));
+    assert!(result.get("pbkdf2_salt").is_none());
+}
+
+#[test]
+fn test_get_configs_omits_missing_keys() {
+    let conn = setup_test_db();
+    set_config_impl(&conn, "record_smart_scroll", "0").unwrap();
+
+    let result = get_configs_impl(&conn, &keys(&["record_smart_scroll", "record_compact_cell"])).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result.get("record_smart_scroll"), Some(&"0".to_string()));
+    assert!(result.get("record_compact_cell").is_none());
+}
+
+#[test]
+fn test_get_configs_empty_key_list_returns_empty_map() {
+    let conn = setup_test_db();
+    set_config_impl(&conn, "record_freeze_columns", "1").unwrap();
+    let result = get_configs_impl(&conn, &[]).unwrap();
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_get_configs_duplicate_keys_are_deduplicated() {
+    let conn = setup_test_db();
+    set_config_impl(&conn, "record_highlight_empty", "1").unwrap();
+    let result = get_configs_impl(&conn, &keys(&["record_highlight_empty", "record_highlight_empty"])).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result.get("record_highlight_empty"), Some(&"1".to_string()));
+}
+
+#[test]
+fn test_get_configs_matches_get_config_for_toolbar_keys() {
+    let conn = setup_test_db();
+    let toolbar = [
+        ("record_freeze_columns", "1"),
+        ("record_smart_scroll", "0"),
+        ("record_compact_cell", "1"),
+        ("record_highlight_empty", "0"),
+        ("record_show_preview", "1"),
+        ("record_collapse_personal_info", "0"),
+    ];
+    for (k, v) in toolbar {
+        set_config_impl(&conn, k, v).unwrap();
+    }
+
+    let requested = keys(&toolbar.iter().map(|(k, _)| *k).collect::<Vec<_>>());
+    let bulk = get_configs_impl(&conn, &requested).unwrap();
+    assert_eq!(bulk.len(), toolbar.len());
+    for (k, v) in toolbar {
+        assert_eq!(bulk.get(k), Some(&v.to_string()));
+        assert_eq!(get_config_impl(&conn, k).unwrap(), Some(v.to_string()));
+    }
 }

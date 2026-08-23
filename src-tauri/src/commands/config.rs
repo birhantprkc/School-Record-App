@@ -1,5 +1,6 @@
 use crate::state::DbState;
 use rusqlite::Connection;
+use std::collections::HashMap;
 use tauri::State;
 
 /// 반환값: None = 버전 동일(모달 표시 안 함), Some(old) = 이전 버전(모달 표시)
@@ -34,6 +35,26 @@ pub fn get_config_impl(conn: &Connection, key: &str) -> Result<Option<String>, S
     Ok(stmt.query_row([key], |row| row.get::<_, String>(0)).ok())
 }
 
+/// 여러 키를 한 번에 조회한다. 저장된 값이 없는 키는 결과 맵에서 빠진다.
+/// 전체 행을 반환하지 않고 요청한 키만 돌려주는 이유는, APP_CONFIGS에
+/// 암호화 salt/verify token도 함께 저장되므로 프론트로 새어나가면 안 되기 때문이다.
+pub fn get_configs_impl(
+    conn: &Connection,
+    keys: &[String],
+) -> Result<HashMap<String, String>, String> {
+    let mut stmt = conn
+        .prepare("SELECT config_value FROM APP_CONFIGS WHERE config_key = ?1")
+        .map_err(|e| e.to_string())?;
+
+    let mut map = HashMap::new();
+    for key in keys {
+        if let Ok(value) = stmt.query_row([key], |row| row.get::<_, String>(0)) {
+            map.insert(key.clone(), value);
+        }
+    }
+    Ok(map)
+}
+
 pub fn set_config_impl(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
     conn.execute(
         "INSERT OR REPLACE INTO APP_CONFIGS (config_key, config_value) VALUES (?1, ?2)",
@@ -51,6 +72,16 @@ pub async fn get_config(
     let guard = db.0.lock().map_err(|e| e.to_string())?;
     let conn = guard.as_ref().ok_or("DB not open")?;
     get_config_impl(conn, &key)
+}
+
+#[tauri::command]
+pub async fn get_configs(
+    db: State<'_, DbState>,
+    keys: Vec<String>,
+) -> Result<HashMap<String, String>, String> {
+    let guard = db.0.lock().map_err(|e| e.to_string())?;
+    let conn = guard.as_ref().ok_or("DB not open")?;
+    get_configs_impl(conn, &keys)
 }
 
 #[tauri::command]
