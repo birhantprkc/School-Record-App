@@ -43,22 +43,19 @@ const FONT_SIZE_MAX = 28
 async function changeFontSize(delta) {
   const next = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, configStore.recordCellFontSize + delta))
   if (next === configStore.recordCellFontSize) return
-  configStore.setRecordCellFontSize(next)
-  if (!compactCell.value) {
-    await nextTick()
-    syncAllRows()
+  settingError.value = ''
+  try {
+    await configStore.setRecordCellFontSize(next)
+  } catch (e) {
+    settingError.value = `설정을 저장하지 못했습니다: ${e}`
   }
 }
 
-async function toggleActivity(actId) {
+function toggleActivity(actId) {
   const next = new Set(collapsedActivities.value)
   if (next.has(actId)) next.delete(actId)
   else next.add(actId)
   collapsedActivities.value = next
-  if (!compactCell.value) {
-    await nextTick()
-    syncAllRows()
-  }
 }
 
 const savingState = ref(new Map())
@@ -85,10 +82,7 @@ async function reloadGrid(id) {
     cellContent.set(cellKey(r.activity_id, r.student_id), r.content)
   }
   savingState.value = new Map()
-  if (!compactCell.value) {
-    await nextTick()
-    syncAllRows()
-  }
+  await resyncHeights()
 }
 
 watch(selectedAreaId, async (id) => {
@@ -155,33 +149,81 @@ function getCellSavingState(activityId, studentId) {
   return savingState.value.get(cellKey(activityId, studentId))
 }
 
-function autoResize(el) {
+function verticalPadding(el) {
+  const cs = getComputedStyle(el)
+  return parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+}
+
+// 활동 셀에서 textarea를 뺀 나머지 높이 (바이트/Copy 줄 + td 상하 패딩)
+function cellOverhead(input) {
+  const td = input.closest('td')
+  if (!td) return 0
+  let extra = verticalPadding(td)
+  for (const child of td.children) {
+    if (child !== input) extra += child.offsetHeight
+  }
+  return extra
+}
+
+// 내용이 잘리지 않는 최소 높이. box-sizing이 border-box이므로
+// scrollHeight(테두리 미포함)에 테두리 높이를 더해야 2px이 잘리지 않는다.
+function naturalHeight(el) {
   el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
+  return el.scrollHeight + (el.offsetHeight - el.clientHeight)
 }
 
 function syncRowHeights(tr) {
   const inputs = Array.from(tr.querySelectorAll('.cell-input'))
   if (!inputs.length) return
-  inputs.forEach(el => autoResize(el))
-  const previewTd = tr.querySelector('.preview-col')
-  const previewH = previewTd ? previewTd.scrollHeight : 0
-  const maxH = Math.max(previewH, ...inputs.map(el => el.scrollHeight))
-  inputs.forEach(el => { el.style.height = maxH + 'px' })
+
+  // 1) 모든 셀을 내용에 맞는 자연 높이로 되돌린 뒤 가장 큰 값을 찾는다.
+  let target = Math.max(...inputs.map(naturalHeight))
+
+  // 2) 미리보기 열이 켜져 있으면 그 내용까지 담기도록 높이를 키운다.
+  //    td는 행 높이만큼 늘어나므로 td.scrollHeight를 재면 이미 늘어난 행 높이를
+  //    되먹임해 셀이 실제 필요보다 계속 커진다. 내부 래퍼를 재야 한다.
+  const previewInner = tr.querySelector('.preview-inner')
+  if (previewInner) {
+    const needed = previewInner.offsetHeight
+        + verticalPadding(previewInner.parentElement)
+        - cellOverhead(inputs[0])
+    target = Math.max(target, needed)
+  }
+
+  inputs.forEach(el => { el.style.height = target + 'px' })
 }
 
 function syncAllRows() {
   document.querySelectorAll('.record-table tr').forEach(syncRowHeights)
 }
 
-async function toggleCompactCell() {
-  if (!await setToolbarOption('compactCell', !compactCell.value)) return
+// 셀높이 고정(compact)일 때는 인라인 높이를 걷어내 CSS의 max-h가 적용되게 한다.
+function clearAllRowHeights() {
+  document.querySelectorAll('.cell-input').forEach(el => { el.style.height = '' })
+}
+
+// 열 구성이나 글자 크기가 바뀌면 줄바꿈 위치가 달라져 기존 높이가 어긋난다.
+// 토글 함수마다 호출을 흩뿌리면 빠뜨리기 쉬우므로 상태 변화를 한 곳에서 감시한다.
+async function resyncHeights() {
   await nextTick()
-  if (compactCell.value) {
-    document.querySelectorAll('.cell-input').forEach(el => { el.style.height = '' })
-  } else {
-    syncAllRows()
-  }
+  if (compactCell.value) clearAllRowHeights()
+  else syncAllRows()
+}
+
+watch(
+    () => [
+      configStore.recordToolbar.freezeColumns,
+      configStore.recordToolbar.collapsePersonalInfo,
+      configStore.recordToolbar.showPreview,
+      configStore.recordToolbar.compactCell,
+      configStore.recordCellFontSize,
+      collapsedActivities.value,
+    ],
+    resyncHeights
+)
+
+async function toggleCompactCell() {
+  await setToolbarOption('compactCell', !compactCell.value)
 }
 
 function onCellInput(activityId, studentId, event) {
@@ -374,11 +416,7 @@ async function togglePreview() {
   if (!await setToolbarOption('showPreview', !showPreview.value)) return
   // 미리보기 열은 셀 높이가 자동일 때만 행 높이가 맞으므로 함께 해제한다.
   if (showPreview.value && compactCell.value) {
-    if (!await setToolbarOption('compactCell', false)) return
-  }
-  if (!compactCell.value) {
-    await nextTick()
-    syncAllRows()
+    await setToolbarOption('compactCell', false)
   }
 }
 
@@ -672,15 +710,18 @@ function isNewGroup(students, index) {
                 class="preview-col td-fixed bg-base text-ink py-2 px-3 border-b border-line-2 border-r border-line-2 align-top w-[360px] min-w-[360px] max-w-[360px] leading-relaxed overflow-hidden break-all"
                 :class="[freezeColumns ? 'sticky z-[2]' : '', previewColLeft, studentRowBgClass(student.id)]"
             >
-              <template v-for="(seg, i) in studentPreviewSpans(student.id)" :key="seg.act.id">
-                <span v-if="i > 0" class="whitespace-pre-wrap">{{ configStore.exportCSeparator ?? ' ' }}</span>
-                <span
-                    class="act-hl-base cursor-pointer hover:opacity-75 transition-opacity duration-100"
-                    :class="getActivityColorClass(seg.act.id)"
-                    :title="seg.act.name"
-                    @click="focusActivityCell(seg.act.id, student.id)"
-                >{{ seg.content }}</span>
-              </template>
+              <!-- td는 행 높이만큼 늘어나므로, 실제 내용 높이는 이 래퍼로 측정한다 -->
+              <div class="preview-inner">
+                <template v-for="(seg, i) in studentPreviewSpans(student.id)" :key="seg.act.id">
+                  <span v-if="i > 0" class="whitespace-pre-wrap">{{ configStore.exportCSeparator ?? ' ' }}</span>
+                  <span
+                      class="act-hl-base cursor-pointer hover:opacity-75 transition-opacity duration-100"
+                      :class="getActivityColorClass(seg.act.id)"
+                      :title="seg.act.name"
+                      @click="focusActivityCell(seg.act.id, student.id)"
+                  >{{ seg.content }}</span>
+                </template>
+              </div>
             </td>
             <!-- 바이트 -->
             <td
