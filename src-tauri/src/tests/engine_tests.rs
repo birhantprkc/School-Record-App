@@ -2,7 +2,7 @@ use crate::engine::{
     apply_rules, apply_rules_cached, detect_conflicts, fetch_rules_from_db,
     get_records_for_scope,
 };
-use crate::state::ReplaceCache;
+use crate::state::{ReplaceCache, MAX_CACHE_ENTRIES};
 use crate::types::ReplaceRule;
 use std::collections::HashMap;
 
@@ -302,4 +302,32 @@ fn test_scope_unknown_returns_error() {
     let conn = setup_test_db();
     let result = get_records_for_scope(&conn, "invalid_scope", &[], None);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_invalidate_clears_entries_and_bumps_version() {
+    let mut cache = ReplaceCache { ruleset_version: 0, entries: HashMap::new() };
+    let rules = vec![make_rule(1, "A", "B", true, 0)];
+    let _ = apply_rules_cached("A", &rules, &mut cache);
+
+    cache.invalidate();
+
+    // 버전만 올리면 옛 항목은 조회되지 않을 뿐 평문이 메모리에 그대로 남는다.
+    assert_eq!(cache.ruleset_version, 1);
+    assert!(cache.entries.is_empty(), "invalidate는 평문을 실제로 버려야 한다");
+}
+
+#[test]
+fn test_cached_clears_when_entry_limit_reached() {
+    let mut cache = ReplaceCache { ruleset_version: 0, entries: HashMap::new() };
+    let rules = vec![make_rule(1, "A", "B", true, 0)];
+    for i in 0..MAX_CACHE_ENTRIES {
+        let _ = apply_rules_cached(&format!("내용{i}"), &rules, &mut cache);
+    }
+    assert_eq!(cache.entries.len(), MAX_CACHE_ENTRIES);
+
+    // 상한에 도달한 뒤 한 건 더 넣으면 통째로 비우고 새 항목만 남는다.
+    let _ = apply_rules_cached("마지막", &rules, &mut cache);
+    assert_eq!(cache.entries.len(), 1);
+    assert!(cache.entries.contains_key("마지막"));
 }

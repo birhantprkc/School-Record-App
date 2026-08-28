@@ -178,7 +178,7 @@ pub fn create_replace_rule(
 
     let rule = create_replace_rule_db(conn, &old_text, &new_text, is_regex, priority)?;
     drop(guard);
-    cache.lock().unwrap().ruleset_version += 1;
+    cache.lock().unwrap().invalidate();
     Ok(rule)
 }
 
@@ -202,7 +202,7 @@ pub fn update_replace_rule(
 
     let rule = update_replace_rule_db(conn, id, &old_text, &new_text, is_regex, enabled, priority)?;
     drop(guard);
-    cache.lock().unwrap().ruleset_version += 1;
+    cache.lock().unwrap().invalidate();
     Ok(rule)
 }
 
@@ -219,7 +219,7 @@ pub fn delete_replace_rule(
 
     delete_replace_rule_impl(conn, id)?;
     drop(guard);
-    cache.lock().unwrap().ruleset_version += 1;
+    cache.lock().unwrap().invalidate();
     Ok(())
 }
 
@@ -236,7 +236,7 @@ pub fn apply_default_replace_rules(
 
     apply_default_replace_rules_impl(conn, &rules)?;
     drop(guard);
-    cache.lock().unwrap().ruleset_version += 1;
+    cache.lock().unwrap().invalidate();
     Ok(())
 }
 

@@ -1,6 +1,8 @@
 use crate::commands::config::set_config_impl;
 use crate::engine::{validate_existing_path, validate_parent_dir_path};
-use crate::state::{clear_crypto_state, CryptoStateHandle, DbPathState, DbState};
+use crate::state::{
+    clear_crypto_state, CryptoStateHandle, DbPathState, DbState, ReplaceCacheState,
+};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -10,6 +12,7 @@ pub(crate) fn new_project_impl(
     state: &DbState,
     db_path_state: &DbPathState,
     crypto: &CryptoStateHandle,
+    cache: &ReplaceCacheState,
 ) -> Result<(), String> {
     validate_parent_dir_path(path, "디렉토리가 존재하지 않습니다.")?;
     let p = std::path::Path::new(&path);
@@ -22,6 +25,8 @@ pub(crate) fn new_project_impl(
     *guard = Some(conn);
     *db_path_state.0.lock().map_err(|e| e.to_string())? = Some(p.to_path_buf());
     clear_crypto_state(crypto)?;
+    // 키만 지우고 캐시를 두면 이전 프로젝트의 평문이 메모리에 그대로 남는다.
+    cache.lock().map_err(|e| e.to_string())?.invalidate();
     Ok(())
 }
 
@@ -30,6 +35,7 @@ pub(crate) fn open_project_impl(
     state: &DbState,
     db_path_state: &DbPathState,
     crypto: &CryptoStateHandle,
+    cache: &ReplaceCacheState,
 ) -> Result<(), String> {
     validate_existing_path(path, "파일이 존재하지 않거나 접근할 수 없습니다.")?;
     let src = std::path::Path::new(&path);
@@ -38,6 +44,8 @@ pub(crate) fn open_project_impl(
     *guard = Some(conn);
     *db_path_state.0.lock().map_err(|e| e.to_string())? = Some(src.to_path_buf());
     clear_crypto_state(crypto)?;
+    // 키만 지우고 캐시를 두면 이전 프로젝트의 평문이 메모리에 그대로 남는다.
+    cache.lock().map_err(|e| e.to_string())?.invalidate();
     Ok(())
 }
 
@@ -59,9 +67,10 @@ pub fn new_project(
     state: State<DbState>,
     db_path: State<DbPathState>,
     crypto: State<CryptoStateHandle>,
+    cache: State<ReplaceCacheState>,
 ) -> Result<(), String> {
     let version = app.package_info().version.to_string();
-    new_project_impl(&path, &version, &state, &db_path, &crypto)
+    new_project_impl(&path, &version, &state, &db_path, &crypto, &cache)
 }
 
 #[tauri::command]
@@ -70,8 +79,9 @@ pub fn open_project(
     state: State<DbState>,
     db_path: State<DbPathState>,
     crypto: State<CryptoStateHandle>,
+    cache: State<ReplaceCacheState>,
 ) -> Result<(), String> {
-    open_project_impl(&path, &state, &db_path, &crypto)
+    open_project_impl(&path, &state, &db_path, &crypto, &cache)
 }
 
 #[tauri::command]

@@ -1,6 +1,10 @@
 use crate::commands::config::check_and_update_app_version_impl;
 use crate::commands::project::{new_project_impl, open_project_impl};
-use crate::state::{current_crypto_key, CryptoState, CryptoStateHandle, DbPathState, DbState};
+use crate::state::{
+    current_crypto_key, CryptoState, CryptoStateHandle, DbPathState, DbState, ReplaceCache,
+    ReplaceCacheState,
+};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -8,6 +12,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 fn crypto_state_with_key() -> CryptoStateHandle {
     Mutex::new(CryptoState {
         key: Some([7u8; 32]),
+    })
+}
+
+/// 이전 프로젝트에서 쓰던 것처럼 평문 한 건이 들어 있는 캐시.
+fn cache_with_plaintext() -> ReplaceCacheState {
+    let mut entries = HashMap::new();
+    entries.insert(
+        "이전 프로젝트 학생 기록".to_string(),
+        ("이전 프로젝트 학생 기록".to_string(), 0u64),
+    );
+    Mutex::new(ReplaceCache {
+        ruleset_version: 0,
+        entries,
     })
 }
 
@@ -31,11 +48,17 @@ fn test_new_project_clears_crypto_state() {
     let db = DbState(Mutex::new(None));
     let db_path = DbPathState(Mutex::new(None));
     let crypto = crypto_state_with_key();
+    let cache = cache_with_plaintext();
 
-    new_project_impl(path.to_str().unwrap(), "0.2.13", &db, &db_path, &crypto).unwrap();
+    new_project_impl(path.to_str().unwrap(), "0.2.13", &db, &db_path, &crypto, &cache).unwrap();
 
     assert!(db.0.lock().unwrap().is_some());
     assert!(current_crypto_key(&crypto).unwrap().is_none());
+    // 키만 지우고 캐시를 두면 이전 프로젝트의 평문이 메모리에 남는다.
+    assert!(
+        cache.lock().unwrap().entries.is_empty(),
+        "프로젝트를 열면 치환 캐시의 평문도 함께 비워져야 한다"
+    );
 
     drop(db); // Windows: 파일 잠금 해제 후 삭제
     std::fs::remove_dir_all(&dir).unwrap();
@@ -51,8 +74,9 @@ fn test_new_project_then_open_does_not_show_modal() {
     let db = DbState(Mutex::new(None));
     let db_path = DbPathState(Mutex::new(None));
     let crypto = crypto_state_with_key();
+    let cache = cache_with_plaintext();
 
-    new_project_impl(path.to_str().unwrap(), "0.2.13", &db, &db_path, &crypto).unwrap();
+    new_project_impl(path.to_str().unwrap(), "0.2.13", &db, &db_path, &crypto, &cache).unwrap();
 
     let guard = db.0.lock().unwrap();
     let conn = guard.as_ref().unwrap();
@@ -74,11 +98,17 @@ fn test_open_project_clears_crypto_state() {
     let db = DbState(Mutex::new(None));
     let db_path = DbPathState(Mutex::new(None));
     let crypto = crypto_state_with_key();
+    let cache = cache_with_plaintext();
 
-    open_project_impl(path.to_str().unwrap(), &db, &db_path, &crypto).unwrap();
+    open_project_impl(path.to_str().unwrap(), &db, &db_path, &crypto, &cache).unwrap();
 
     assert!(db.0.lock().unwrap().is_some());
     assert!(current_crypto_key(&crypto).unwrap().is_none());
+    // 키만 지우고 캐시를 두면 이전 프로젝트의 평문이 메모리에 남는다.
+    assert!(
+        cache.lock().unwrap().entries.is_empty(),
+        "프로젝트를 열면 치환 캐시의 평문도 함께 비워져야 한다"
+    );
 
     drop(db); // Windows: 파일 잠금 해제 후 삭제
     std::fs::remove_dir_all(&dir).unwrap();

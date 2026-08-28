@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::{Component, Path};
 
 use crate::crypto::maybe_decrypt;
-use crate::state::ReplaceCache;
+use crate::state::{ReplaceCache, MAX_CACHE_ENTRIES};
 use crate::types::{RecordCell, ReplaceRule};
 
 fn validate_absolute_path_without_parent_dir(path: &str) -> Result<&Path, String> {
@@ -61,6 +61,11 @@ pub fn apply_rules_cached(content: &str, rules: &[ReplaceRule], cache: &mut Repl
         }
     }
     let result = apply_rules(content, rules);
+    // 상한을 넘으면 통째로 비운다. 캐시는 복호화된 평문을 그대로 담고 있어서
+    // 그냥 두면 작업량에 비례해 평문이 메모리에 계속 쌓인다.
+    if cache.entries.len() >= MAX_CACHE_ENTRIES {
+        cache.entries.clear();
+    }
     cache.entries.insert(content.to_string(), (result.clone(), version));
     result
 }

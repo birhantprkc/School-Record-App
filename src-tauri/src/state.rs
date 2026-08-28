@@ -35,9 +35,28 @@ pub fn clear_crypto_state(crypto: &CryptoStateHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 치환 결과 캐시.
+///
+/// `entries`의 key와 value는 모두 **복호화된 평문**이다. 따라서 규칙이 바뀌거나
+/// 프로젝트가 바뀌면 반드시 비워야 한다. 남겨두면 암호화 키를 zeroize한 뒤에도,
+/// 심지어 다른 프로젝트를 연 뒤에도 이전 학생 기록의 평문이 메모리에 남는다.
 pub struct ReplaceCache {
     pub ruleset_version: u64,
     pub entries: HashMap<String, (String, u64)>,
+}
+
+/// 캐시에 보관할 최대 항목 수. 넘으면 통째로 비운다.
+/// 캐시는 성능 보조 수단일 뿐이라 비워도 정확성에는 영향이 없다.
+pub const MAX_CACHE_ENTRIES: usize = 5_000;
+
+impl ReplaceCache {
+    /// 규칙 세트 버전을 올리고 보관 중인 평문을 모두 버린다.
+    ///
+    /// 버전만 올리면 옛 항목은 조회되지 않을 뿐 메모리에는 그대로 남는다.
+    pub fn invalidate(&mut self) {
+        self.ruleset_version += 1;
+        self.entries.clear();
+    }
 }
 
 pub type ReplaceCacheState = Mutex<ReplaceCache>;
