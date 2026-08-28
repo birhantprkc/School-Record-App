@@ -1,5 +1,5 @@
 use crate::commands::area::{
-    create_area_impl, delete_area_impl, get_areas_impl, update_area_impl,
+    create_area_impl, delete_area_impl, get_areas_impl, update_area_impl, validate_byte_limit,
 };
 use super::{insert_activity, insert_area, insert_student, setup_test_db};
 
@@ -107,28 +107,33 @@ fn test_delete_area_cascades_area_activity() {
     assert_eq!(count, 0);
 }
 
-// ── CHECK 제약 검증 ────────────────────────────────────────────
+// ── byte_limit 범위 검증 ───────────────────────────────────────
+// 스키마의 CHECK 제약과 같은 기준을 커맨드 진입부에서 먼저 거른다.
+// 제약에 그대로 걸리면 영문 SQLite 원문이 사용자에게 노출된다.
 
 #[test]
-fn test_create_area_byte_limit_zero_violates_check() {
+fn test_create_area_byte_limit_zero_rejected_in_korean() {
     let conn = setup_test_db();
     let err = create_area_impl(&conn, "영역", 0).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "byte_limit=0 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("글자 수"), "byte_limit=0 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
 }
 
 #[test]
-fn test_create_area_negative_byte_limit_violates_check() {
+fn test_create_area_negative_byte_limit_rejected_in_korean() {
     let conn = setup_test_db();
     let err = create_area_impl(&conn, "영역", -100).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "byte_limit=-100 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("글자 수"), "byte_limit=-100 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
 }
 
 #[test]
-fn test_update_area_byte_limit_zero_violates_check() {
+fn test_update_area_byte_limit_zero_rejected_in_korean() {
     let conn = setup_test_db();
     let id = create_area_impl(&conn, "영역", 500).unwrap();
     let err = update_area_impl(&conn, id, "영역", 0).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "update byte_limit=0 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("글자 수"), "update byte_limit=0 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
 }
 
 #[test]
@@ -153,3 +158,13 @@ fn test_delete_area_cascades_area_student() {
         .unwrap();
     assert_eq!(count, 0);
 }
+
+// ── validate_byte_limit ──────────────────────────────────────
+
+#[test]
+fn test_validate_byte_limit_accepts_positive() {
+    assert!(validate_byte_limit(1).is_ok());
+    assert!(validate_byte_limit(1500).is_ok());
+}
+
+

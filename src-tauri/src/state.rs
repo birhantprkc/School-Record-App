@@ -61,10 +61,18 @@ impl ReplaceCache {
 
 pub type ReplaceCacheState = Mutex<ReplaceCache>;
 
-pub fn unique_err(e: &rusqlite::Error, conflict_msg: &str) -> String {
-    if e.to_string().contains("UNIQUE constraint failed") {
+/// SQLite 제약 위반을 한국어 메시지로 바꾼다.
+///
+/// 번역하지 않으면 "CHECK constraint failed: Student" 같은 영문 원문이 그대로
+/// 교사에게 표시된다. CHECK 위반은 커맨드 진입부 검증이 먼저 막는 것이 원칙이고,
+/// 이 번역은 검증이 놓친 경우를 위한 방어선이다.
+pub fn constraint_err(e: &rusqlite::Error, conflict_msg: &str) -> String {
+    let text = e.to_string();
+    if text.contains("UNIQUE constraint failed") {
         conflict_msg.to_string()
+    } else if text.contains("CHECK constraint failed") {
+        "입력값이 허용 범위를 벗어났습니다.".to_string()
     } else {
-        e.to_string()
+        text
     }
 }

@@ -1,4 +1,5 @@
 use crate::commands::crypto::resolve_data_key;
+use crate::commands::student::validate_student_identity;
 use crate::db::with_transaction;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::state::{CryptoStateHandle, DbState};
@@ -308,6 +309,7 @@ pub fn bulk_import_records_impl(
     let mut student_cache: HashMap<(i64, i64, i64), i64> = HashMap::new();
 
     for r in records.iter() {
+        validate_student_identity(r.grade, r.class_num, r.number)?;
         let cache_key = (r.grade, r.class_num, r.number);
 
         if !student_cache.contains_key(&cache_key) {
@@ -449,6 +451,8 @@ pub fn preview_import_records_impl(
             name
         };
 
+        // 미리보기 단계에서 걸러야 사용자가 적용 직전이 아니라 지금 알 수 있다.
+        validate_student_identity(r.grade, r.class_num, r.number)?;
         let cache_key = (r.grade, r.class_num, r.number);
         let student_info = if let Some(cached) = student_cache.get(&cache_key) {
             cached.clone()

@@ -1,5 +1,5 @@
 use crate::db::with_transaction;
-use crate::state::{DbState, unique_err};
+use crate::state::{DbState, constraint_err};
 use crate::types::{ActivityDetail, AreaRef};
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ pub fn create_activity_impl(conn: &Connection, name: &str) -> Result<i64, String
         "INSERT INTO Activity (name) VALUES (?1)",
         rusqlite::params![name],
     )
-    .map_err(|e| unique_err(&e, &format!("이미 같은 이름의 활동이 있습니다: {name}")))?;
+    .map_err(|e| constraint_err(&e, &format!("이미 같은 이름의 활동이 있습니다: {name}")))?;
 
     Ok(conn.last_insert_rowid())
 }
@@ -72,7 +72,7 @@ pub fn update_activity_impl(conn: &Connection, id: i64, name: &str) -> Result<()
         "UPDATE Activity SET name = ?1 WHERE id = ?2",
         rusqlite::params![name, id],
     )
-    .map_err(|e| unique_err(&e, &format!("이미 같은 이름의 활동이 있습니다: {name}")))?;
+    .map_err(|e| constraint_err(&e, &format!("이미 같은 이름의 활동이 있습니다: {name}")))?;
 
     Ok(())
 }

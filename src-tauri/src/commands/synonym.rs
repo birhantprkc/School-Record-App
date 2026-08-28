@@ -1,7 +1,7 @@
 use crate::commands::crypto::resolve_data_key;
 use crate::crypto::maybe_decrypt;
 use crate::db::with_transaction;
-use crate::state::{unique_err, CryptoStateHandle, DbState};
+use crate::state::{constraint_err, CryptoStateHandle, DbState};
 use crate::types::{InspectRecord, SeedGroupInput, SynonymGroupFull, SynonymWordItem};
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -61,7 +61,7 @@ pub fn get_synonym_groups_impl(conn: &Connection) -> Result<Vec<SynonymGroupFull
 
 pub fn create_synonym_group_impl(conn: &Connection, name: &str) -> Result<i64, String> {
     conn.execute("INSERT INTO SynonymGroup (name) VALUES (?1)", [name])
-        .map_err(|e| unique_err(&e, "이미 존재하는 그룹명입니다."))?;
+        .map_err(|e| constraint_err(&e, "이미 존재하는 그룹명입니다."))?;
     Ok(conn.last_insert_rowid())
 }
 

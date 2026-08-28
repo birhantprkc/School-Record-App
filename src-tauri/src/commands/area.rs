@@ -1,4 +1,4 @@
-use crate::state::{DbState, unique_err};
+use crate::state::{DbState, constraint_err};
 use crate::types::{ActivityItem, AreaItem};
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -57,22 +57,32 @@ pub fn get_areas_impl(conn: &Connection) -> Result<Vec<AreaItem>, String> {
     Ok(areas)
 }
 
+/// byte_limit이 스키마의 CHECK 제약(> 0)을 만족하는지 검사한다.
+pub fn validate_byte_limit(byte_limit: i64) -> Result<(), String> {
+    if byte_limit < 1 {
+        return Err(format!("글자 수 제한은 1 이상이어야 합니다: {byte_limit}"));
+    }
+    Ok(())
+}
+
 pub fn create_area_impl(conn: &Connection, name: &str, byte_limit: i64) -> Result<i64, String> {
+    validate_byte_limit(byte_limit)?;
     conn.execute(
         "INSERT INTO Area (name, byte_limit) VALUES (?1, ?2)",
         rusqlite::params![name, byte_limit],
     )
-    .map_err(|e| unique_err(&e, &format!("이미 같은 이름의 영역이 있습니다: {name}")))?;
+    .map_err(|e| constraint_err(&e, &format!("이미 같은 이름의 영역이 있습니다: {name}")))?;
 
     Ok(conn.last_insert_rowid())
 }
 
 pub fn update_area_impl(conn: &Connection, id: i64, name: &str, byte_limit: i64) -> Result<(), String> {
+    validate_byte_limit(byte_limit)?;
     conn.execute(
         "UPDATE Area SET name = ?1, byte_limit = ?2 WHERE id = ?3",
         rusqlite::params![name, byte_limit, id],
     )
-    .map_err(|e| unique_err(&e, &format!("이미 같은 이름의 영역이 있습니다: {name}")))?;
+    .map_err(|e| constraint_err(&e, &format!("이미 같은 이름의 영역이 있습니다: {name}")))?;
 
     Ok(())
 }

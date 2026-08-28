@@ -1,7 +1,7 @@
 use crate::commands::crypto::resolve_data_key;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::db::with_transaction;
-use crate::state::{unique_err, CryptoStateHandle, DbState};
+use crate::state::{constraint_err, CryptoStateHandle, DbState};
 use crate::types::{BulkUpsertResult, StudentInput, StudentItem};
 use rusqlite::Connection;
 use tauri::State;
@@ -45,6 +45,23 @@ pub fn get_students_impl(
     Ok(students)
 }
 
+/// 학번 구성 요소가 스키마의 CHECK 제약을 만족하는지 검사한다.
+///
+/// 검증 없이 INSERT하면 "CHECK constraint failed: Student"라는 영문 SQLite
+/// 원문이 그대로 사용자에게 표시된다. 어떤 값이 왜 잘못되었는지 알려준다.
+pub fn validate_student_identity(grade: i64, class_num: i64, number: i64) -> Result<(), String> {
+    if grade < 1 {
+        return Err(format!("학년은 1 이상이어야 합니다: {grade}"));
+    }
+    if class_num < 1 {
+        return Err(format!("반은 1 이상이어야 합니다: {class_num}"));
+    }
+    if number < 1 {
+        return Err(format!("번호는 1 이상이어야 합니다: {number}"));
+    }
+    Ok(())
+}
+
 pub fn create_student_impl(
     conn: &Connection,
     grade: i64,
@@ -53,13 +70,14 @@ pub fn create_student_impl(
     name: &str,
     key: Option<[u8; 32]>,
 ) -> Result<i64, String> {
+    validate_student_identity(grade, class_num, number)?;
     let stored_name = maybe_encrypt(name, key)?;
     conn.execute(
         "INSERT INTO Student (grade, class_num, number, name) VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params![grade, class_num, number, stored_name],
     )
     .map_err(|e| {
-        unique_err(
+        constraint_err(
             &e,
             &format!("이미 같은 학번의 학생이 있습니다: {grade}학년 {class_num}반 {number}번"),
         )
@@ -76,13 +94,14 @@ pub fn update_student_impl(
     name: &str,
     key: Option<[u8; 32]>,
 ) -> Result<(), String> {
+    validate_student_identity(grade, class_num, number)?;
     let stored_name = maybe_encrypt(name, key)?;
     conn.execute(
         "UPDATE Student SET grade = ?1, class_num = ?2, number = ?3, name = ?4 WHERE id = ?5",
         rusqlite::params![grade, class_num, number, stored_name, id],
     )
     .map_err(|e| {
-        unique_err(
+        constraint_err(
             &e,
             &format!("이미 같은 학번의 학생이 있습니다: {grade}학년 {class_num}반 {number}번"),
         )
@@ -105,6 +124,7 @@ pub fn bulk_upsert_students_impl(
         let mut inserted: i64 = 0;
         let mut updated: i64 = 0;
         for s in students.iter() {
+            validate_student_identity(s.grade, s.class_num, s.number)?;
             let stored_name = maybe_encrypt(&s.name, key)?;
             conn.execute(
                 "INSERT OR IGNORE INTO Student (grade, class_num, number, name)

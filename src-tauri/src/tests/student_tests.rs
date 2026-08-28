@@ -1,6 +1,7 @@
 use crate::commands::student::{
     bulk_upsert_students_impl, create_student_impl, delete_student_impl, get_area_students_impl,
     get_students_impl, set_area_activities_impl, set_area_students_impl, update_student_impl,
+    validate_student_identity,
 };
 use crate::types::StudentInput;
 use super::{insert_activity, insert_area, insert_record, insert_student, setup_test_db};
@@ -276,30 +277,77 @@ fn test_get_students_empty() {
 // ── CHECK 제약 검증 ────────────────────────────────────────────
 
 #[test]
-fn test_create_student_grade_zero_violates_check() {
+fn test_create_student_grade_zero_rejected_in_korean() {
     let conn = setup_test_db();
     let err = create_student_impl(&conn, 0, 1, 1, "홍길동", None).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "grade=0 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("학년"), "grade=0 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
 }
 
 #[test]
-fn test_create_student_class_num_zero_violates_check() {
+fn test_create_student_class_num_zero_rejected_in_korean() {
     let conn = setup_test_db();
     let err = create_student_impl(&conn, 1, 0, 1, "홍길동", None).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "class_num=0 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("반"), "class_num=0 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
 }
 
 #[test]
-fn test_create_student_number_zero_violates_check() {
+fn test_create_student_number_zero_rejected_in_korean() {
     let conn = setup_test_db();
     let err = create_student_impl(&conn, 1, 1, 0, "홍길동", None).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "number=0 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("번호"), "number=0 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
 }
 
 #[test]
-fn test_update_student_negative_grade_violates_check() {
+fn test_update_student_negative_grade_rejected_in_korean() {
     let conn = setup_test_db();
     let id = create_student_impl(&conn, 1, 1, 1, "홍길동", None).unwrap();
     let err = update_student_impl(&conn, id, -1, 1, 1, "홍길동", None).unwrap_err();
-    assert!(err.contains("CHECK constraint failed"), "grade=-1 CHECK 위반이어야 함: {err}");
+    assert!(err.contains("학년"), "grade=-1 에러 메시지: {err}");
+    assert!(!err.contains("CHECK constraint"), "영문 원문 노출: {err}");
+}
+
+// ── validate_student_identity ────────────────────────────────
+
+#[test]
+fn test_validate_student_identity_accepts_valid_values() {
+    assert!(validate_student_identity(1, 1, 1).is_ok());
+    assert!(validate_student_identity(3, 12, 35).is_ok());
+}
+
+#[test]
+fn test_validate_student_identity_rejects_zero_and_negative() {
+    // 스키마의 CHECK 제약과 같은 기준이다. 검증이 없으면 영문 SQLite 원문이 노출된다.
+    for (g, c, n, keyword) in [
+        (0, 1, 1, "학년"),
+        (-1, 1, 1, "학년"),
+        (1, 0, 1, "반"),
+        (1, -2, 1, "반"),
+        (1, 1, 0, "번호"),
+        (1, 1, -3, "번호"),
+    ] {
+        let err = validate_student_identity(g, c, n).unwrap_err();
+        assert!(err.contains(keyword), "({g},{c},{n}) 에러 메시지: {err}");
+    }
+}
+
+
+#[test]
+fn test_bulk_upsert_students_rejects_invalid_identity_and_rolls_back() {
+    let conn = setup_test_db();
+    let students = vec![
+        StudentInput { grade: 1, class_num: 1, number: 1, name: "홍길동".to_string() },
+        StudentInput { grade: 0, class_num: 1, number: 2, name: "김철수".to_string() },
+    ];
+
+    let result = bulk_upsert_students_impl(&conn, &students, None);
+    assert!(result.is_err());
+
+    // 트랜잭션 안에서 검증하므로 앞선 학생도 남으면 안 된다.
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM Student", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0);
 }

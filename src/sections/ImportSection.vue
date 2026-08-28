@@ -171,16 +171,22 @@ const studentIdPreviewRows = computed(() => {
 
 function resolveIdentity(row) {
   const m = colMap.value
+  let identity
   if (idMode.value === 'studentId') {
     const p = parseStudentId(row[m.studentId])
     if (!p) return null
-    return {grade: p.grade, class_num: p.classNum, number: p.number}
+    identity = {grade: p.grade, class_num: p.classNum, number: p.number}
+  } else {
+    identity = {
+      grade: Number(row[m.grade]),
+      class_num: Number(row[m.classNum]),
+      number: Number(row[m.number]),
+    }
   }
-  const grade = Number(row[m.grade])
-  const class_num = Number(row[m.classNum])
-  const number = Number(row[m.number])
-  if (!grade || !class_num || !number) return null
-  return {grade, class_num, number}
+  // 두 경로 모두 1 이상의 정수만 허용한다. 학번 '0101'처럼 0이 나오는 경우,
+  // 음수(백엔드 CHECK 제약), 소수(i64 역직렬화 실패)가 모두 여기서 걸린다.
+  if (!Object.values(identity).every(v => Number.isInteger(v) && v >= 1)) return null
+  return identity
 }
 
 // ── 파일 처리 ─────────────────────────────────────────────────
