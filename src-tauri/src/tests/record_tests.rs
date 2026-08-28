@@ -633,3 +633,25 @@ fn test_bulk_import_same_student_multiple_activities_records_saved() {
         .unwrap();
     assert_eq!(record_count, 2);
 }
+
+#[test]
+fn test_save_snapshot_without_note_stores_null() {
+    // 메모는 선택 사항이다. UI에서 빈 값을 보내면 note가 NULL로 남는다.
+    let conn = setup_test_db();
+    let act_id = insert_activity(&conn, "발표");
+    let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
+
+    upsert_record_impl(&conn, act_id, stu_id, "발표 내용", None).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, None).unwrap();
+
+    let note: Option<String> = conn
+        .query_row(
+            "SELECT h.note FROM ActivityRecordHistory h
+             JOIN ActivityRecord r ON r.id = h.activity_record_id
+             WHERE r.activity_id=?1 AND r.student_id=?2",
+            rusqlite::params![act_id, stu_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(note.is_none(), "메모 없이 저장하면 note는 NULL이어야 한다");
+}

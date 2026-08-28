@@ -85,14 +85,14 @@ function formatDate(str) {
 async function saveManualSnapshot() {
   if (saving.value) return
   const note = noteInput.value.trim()
-  if (!note) return
   saving.value = true
   saveError.value = ''
   try {
     await recordStore.saveHistorySnapshot({
       activityId: props.activityId,
       studentId: props.studentId,
-      note,
+      // 메모는 선택 사항이다. 빈 값은 null로 보내 note 컬럼을 비운다.
+      note: note || null,
     })
     noteInput.value = ''
     showNoteForm.value = false
@@ -136,14 +136,14 @@ async function saveManualSnapshot() {
             <input
                 v-model="noteInput"
                 class="ui-input flex-1 w-auto py-[7px] px-3 rounded-lg text-base border-line-2 placeholder:text-ink-5"
-                placeholder="메모를 입력하세요 (필수)"
+                placeholder="메모를 입력하세요 (선택)"
                 maxlength="100"
                 @keydown.enter="saveManualSnapshot"
                 @keydown.esc.stop="showNoteForm = false"
             />
             <button
                 class="btn-primary"
-                :disabled="!noteInput.trim() || saving"
+                :disabled="saving"
                 @click="saveManualSnapshot"
             >
               {{ saving ? '저장 중...' : '저장' }}
