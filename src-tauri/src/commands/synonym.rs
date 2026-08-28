@@ -3,7 +3,7 @@ use crate::crypto::maybe_decrypt;
 use crate::db::with_transaction;
 use crate::state::{constraint_err, CryptoStateHandle, DbState};
 use crate::types::{InspectRecord, SeedGroupInput, SynonymGroupFull, SynonymWordItem};
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashMap;
 use tauri::State;
 
@@ -125,7 +125,8 @@ pub fn apply_default_synonyms_impl(
                     [&group.name],
                     |r| r.get(0),
                 )
-                .ok();
+                .optional()
+                .map_err(|e| e.to_string())?;
 
             let gid = match existing_id {
                 Some(id) => id,

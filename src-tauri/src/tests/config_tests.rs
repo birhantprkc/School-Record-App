@@ -280,3 +280,43 @@ fn test_impl_layer_still_reaches_protected_keys() {
         Some("c2FsdA==".to_string())
     );
 }
+
+// ── 키 없음 vs 읽기 실패 ─────────────────────────────────────
+
+#[test]
+fn test_get_config_missing_key_is_none_not_error() {
+    // "키가 없음"은 정상이고 None이다.
+    let conn = setup_test_db();
+    assert!(get_config_impl(&conn, "없는_키").unwrap().is_none());
+}
+
+/// 행은 있는데 값을 String으로 읽을 수 없는 상태를 만든다.
+/// SQLite는 동적 타입이라 TEXT 컬럼에도 BLOB이 들어간다.
+/// prepare는 성공하고 query_row만 실패하므로, 정확히 바뀐 경로를 짚는다.
+fn insert_unreadable_value(conn: &rusqlite::Connection, key: &str) {
+    conn.execute(
+        "INSERT INTO APP_CONFIGS (config_key, config_value) VALUES (?1, ?2)",
+        rusqlite::params![key, vec![0xFFu8, 0xFE, 0xFD]],
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_get_config_read_failure_is_error_not_none() {
+    // 읽기 실패를 None으로 뭉개면 is_encryption_enabled가 false가 되어
+    // 암호화된 DB를 평문으로 취급하고 평문을 기록하게 된다.
+    let conn = setup_test_db();
+    insert_unreadable_value(&conn, "encryption_enabled");
+
+    let result = get_config_impl(&conn, "encryption_enabled");
+    assert!(result.is_err(), "읽기 실패는 None이 아니라 오류여야 한다");
+}
+
+#[test]
+fn test_get_configs_read_failure_is_error_not_empty_map() {
+    let conn = setup_test_db();
+    insert_unreadable_value(&conn, "theme_mode");
+
+    let result = get_configs_impl(&conn, &keys(&["theme_mode"]));
+    assert!(result.is_err(), "읽기 실패는 누락이 아니라 오류여야 한다");
+}

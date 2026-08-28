@@ -1,5 +1,5 @@
 use crate::state::DbState;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashMap;
 use tauri::State;
 
@@ -30,7 +30,8 @@ pub fn check_and_update_app_version_impl(conn: &Connection, current_version: &st
             [],
             |row| row.get(0),
         )
-        .ok();
+        .optional()
+        .map_err(|e| e.to_string())?;
 
     if stored.as_deref() == Some(current_version) {
         return Ok(None);
@@ -50,7 +51,12 @@ pub fn get_config_impl(conn: &Connection, key: &str) -> Result<Option<String>, S
         .prepare("SELECT config_value FROM APP_CONFIGS WHERE config_key = ?1")
         .map_err(|e| e.to_string())?;
 
-    Ok(stmt.query_row([key], |row| row.get::<_, String>(0)).ok())
+    // .ok()로 뭉개면 "키가 없음"과 "DB 읽기 실패"가 같은 None이 된다.
+    // is_encryption_enabled가 이 함수를 쓰므로, 읽기 실패가 None이 되면
+    // 암호화된 DB를 평문으로 취급해 평문을 기록하게 된다.
+    stmt.query_row([key], |row| row.get::<_, String>(0))
+        .optional()
+        .map_err(|e| e.to_string())
 }
 
 /// 여러 키를 한 번에 조회한다. 저장된 값이 없는 키는 결과 맵에서 빠진다.
@@ -69,7 +75,11 @@ pub fn get_configs_impl(
 
     let mut map = HashMap::new();
     for key in keys {
-        if let Ok(value) = stmt.query_row([key], |row| row.get::<_, String>(0)) {
+        if let Some(value) = stmt
+            .query_row([key], |row| row.get::<_, String>(0))
+            .optional()
+            .map_err(|e| e.to_string())?
+        {
             map.insert(key.clone(), value);
         }
     }

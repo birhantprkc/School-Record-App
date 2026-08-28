@@ -10,6 +10,7 @@ use crate::state::{CryptoStateHandle, DbState, ReplaceCache, ReplaceCacheState};
 use crate::types::{ReplaceApplyResult, ReplacePreviewItem, ReplaceRule};
 use regex::Regex;
 use rusqlite::Connection;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tauri::State;
 
@@ -261,25 +262,30 @@ pub fn preview_replace_impl(
 
     let mut act_names: HashMap<i64, String> = HashMap::new();
     let mut stu_names: HashMap<i64, String> = HashMap::new();
+    // 이름 조회 실패를 "활동#5" 같은 문자열로 덮어쓰지 않는다. 레코드는 외래키로
+    // Activity·Student를 참조하므로 행이 없다는 것 자체가 무결성 문제이고,
+    // 암호화가 켜져 있으면 그 placeholder가 maybe_decrypt로 넘어가 더 엉뚱한
+    // 오류가 된다.
     for rec in &records {
-        act_names.entry(rec.activity_id).or_insert_with(|| {
-            conn.query_row(
-                "SELECT name FROM Activity WHERE id=?1",
-                rusqlite::params![rec.activity_id],
-                |r| r.get(0),
-            )
-            .unwrap_or_else(|_| format!("활동#{}", rec.activity_id))
-        });
-        if !stu_names.contains_key(&rec.student_id) {
+        if let Entry::Vacant(slot) = act_names.entry(rec.activity_id) {
+            let name: String = conn
+                .query_row(
+                    "SELECT name FROM Activity WHERE id=?1",
+                    rusqlite::params![rec.activity_id],
+                    |r| r.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            slot.insert(name);
+        }
+        if let Entry::Vacant(slot) = stu_names.entry(rec.student_id) {
             let raw_name: String = conn
                 .query_row(
                     "SELECT name FROM Student WHERE id=?1",
                     rusqlite::params![rec.student_id],
                     |r| r.get(0),
                 )
-                .unwrap_or_else(|_| format!("학생#{}", rec.student_id));
-            let name = maybe_decrypt(raw_name, key)?;
-            stu_names.insert(rec.student_id, name);
+                .map_err(|e| e.to_string())?;
+            slot.insert(maybe_decrypt(raw_name, key)?);
         }
     }
 
