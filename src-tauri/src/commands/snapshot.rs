@@ -92,7 +92,7 @@ pub fn create_snapshot(
     memo: Option<String>,
     state: State<DbState>,
 ) -> Result<SnapshotItem, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -101,7 +101,7 @@ pub fn create_snapshot(
 
 #[tauri::command]
 pub fn get_snapshots(state: State<DbState>) -> Result<Vec<SnapshotItem>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -113,7 +113,7 @@ pub fn restore_snapshot(
     snapshot_id: i64,
     state: State<DbState>,
 ) -> Result<i64, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;

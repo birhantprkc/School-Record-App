@@ -215,7 +215,7 @@ pub fn get_students(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<Vec<StudentItem>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -232,7 +232,7 @@ pub fn create_student(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<i64, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -250,7 +250,7 @@ pub fn update_student(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -260,7 +260,7 @@ pub fn update_student(
 
 #[tauri::command]
 pub fn delete_student(id: i64, state: State<DbState>) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -273,7 +273,7 @@ pub fn set_area_activities(
     activity_ids: Vec<i64>,
     state: State<DbState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -286,7 +286,7 @@ pub fn bulk_upsert_students(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<BulkUpsertResult, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -296,7 +296,7 @@ pub fn bulk_upsert_students(
 
 #[tauri::command]
 pub fn get_area_students(area_id: i64, state: State<DbState>) -> Result<Vec<i64>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -309,7 +309,7 @@ pub fn set_area_students(
     student_ids: Vec<i64>,
     state: State<DbState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;

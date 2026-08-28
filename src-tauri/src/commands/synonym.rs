@@ -242,7 +242,7 @@ pub fn get_all_records_for_inspect_impl(
 
 #[tauri::command]
 pub fn get_synonym_groups(state: State<DbState>) -> Result<Vec<SynonymGroupFull>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -251,7 +251,7 @@ pub fn get_synonym_groups(state: State<DbState>) -> Result<Vec<SynonymGroupFull>
 
 #[tauri::command]
 pub fn create_synonym_group(name: String, state: State<DbState>) -> Result<i64, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -260,7 +260,7 @@ pub fn create_synonym_group(name: String, state: State<DbState>) -> Result<i64, 
 
 #[tauri::command]
 pub fn delete_synonym_group(id: i64, state: State<DbState>) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -269,7 +269,7 @@ pub fn delete_synonym_group(id: i64, state: State<DbState>) -> Result<(), String
 
 #[tauri::command]
 pub fn add_synonym_word(group_id: i64, word: String, state: State<DbState>) -> Result<i64, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -282,7 +282,7 @@ pub fn add_synonym_words_batch(
     words: Vec<String>,
     state: State<DbState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -291,7 +291,7 @@ pub fn add_synonym_words_batch(
 
 #[tauri::command]
 pub fn delete_synonym_word(id: i64, state: State<DbState>) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -303,7 +303,7 @@ pub fn apply_default_synonyms(
     groups: Vec<SeedGroupInput>,
     state: State<DbState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -317,7 +317,7 @@ pub fn get_all_records_for_inspect(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<Vec<InspectRecord>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;

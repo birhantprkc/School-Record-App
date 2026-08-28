@@ -143,7 +143,7 @@ pub fn set_activity_areas_impl(
 
 #[tauri::command]
 pub fn get_activities(state: State<DbState>) -> Result<Vec<ActivityDetail>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -152,7 +152,7 @@ pub fn get_activities(state: State<DbState>) -> Result<Vec<ActivityDetail>, Stri
 
 #[tauri::command]
 pub fn create_activity(name: String, state: State<DbState>) -> Result<i64, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -161,7 +161,7 @@ pub fn create_activity(name: String, state: State<DbState>) -> Result<i64, Strin
 
 #[tauri::command]
 pub fn update_activity(id: i64, name: String, state: State<DbState>) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -170,7 +170,7 @@ pub fn update_activity(id: i64, name: String, state: State<DbState>) -> Result<(
 
 #[tauri::command]
 pub fn delete_activity(id: i64, state: State<DbState>) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -182,7 +182,7 @@ pub fn create_activities_batch(
     names: Vec<String>,
     state: State<DbState>,
 ) -> Result<HashMap<String, i64>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -195,7 +195,7 @@ pub fn set_activity_areas(
     area_ids: Vec<i64>,
     state: State<DbState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;

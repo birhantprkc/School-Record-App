@@ -161,7 +161,7 @@ pub fn apply_default_replace_rules_impl(
 
 #[tauri::command]
 pub fn get_replace_rules(state: State<DbState>) -> Result<Vec<ReplaceRule>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -179,14 +179,14 @@ pub fn create_replace_rule(
 ) -> Result<ReplaceRule, String> {
     validate_replace_rule(&old_text, &new_text, is_regex)?;
 
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
 
     let rule = create_replace_rule_db(conn, &old_text, &new_text, is_regex, priority)?;
     drop(guard);
-    cache.lock().unwrap().invalidate();
+    cache.lock().map_err(|e| e.to_string())?.invalidate();
     Ok(rule)
 }
 
@@ -203,14 +203,14 @@ pub fn update_replace_rule(
 ) -> Result<ReplaceRule, String> {
     validate_replace_rule(&old_text, &new_text, is_regex)?;
 
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
 
     let rule = update_replace_rule_db(conn, id, &old_text, &new_text, is_regex, enabled, priority)?;
     drop(guard);
-    cache.lock().unwrap().invalidate();
+    cache.lock().map_err(|e| e.to_string())?.invalidate();
     Ok(rule)
 }
 
@@ -220,14 +220,14 @@ pub fn delete_replace_rule(
     state: State<DbState>,
     cache: State<ReplaceCacheState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
 
     delete_replace_rule_impl(conn, id)?;
     drop(guard);
-    cache.lock().unwrap().invalidate();
+    cache.lock().map_err(|e| e.to_string())?.invalidate();
     Ok(())
 }
 
@@ -237,14 +237,14 @@ pub fn apply_default_replace_rules(
     state: State<DbState>,
     cache: State<ReplaceCacheState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
 
     apply_default_replace_rules_impl(conn, &rules)?;
     drop(guard);
-    cache.lock().unwrap().invalidate();
+    cache.lock().map_err(|e| e.to_string())?.invalidate();
     Ok(())
 }
 
@@ -366,12 +366,12 @@ pub fn preview_replace(
     cache: State<ReplaceCacheState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<Vec<ReplacePreviewItem>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     let key = resolve_data_key(conn, &crypto)?;
-    let mut cache_guard = cache.lock().unwrap();
+    let mut cache_guard = cache.lock().map_err(|e| e.to_string())?;
     preview_replace_impl(conn, &scope_type, &area_ids, key, &mut cache_guard)
 }
 
@@ -383,11 +383,11 @@ pub fn apply_replace(
     cache: State<ReplaceCacheState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<ReplaceApplyResult, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     let key = resolve_data_key(conn, &crypto)?;
-    let mut cache_guard = cache.lock().unwrap();
+    let mut cache_guard = cache.lock().map_err(|e| e.to_string())?;
     apply_replace_impl(conn, &scope_type, &area_ids, key, &mut cache_guard)
 }

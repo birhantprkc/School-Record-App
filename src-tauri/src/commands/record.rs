@@ -138,7 +138,7 @@ pub fn get_area_grid(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<AreaGridData, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -174,7 +174,7 @@ pub fn upsert_record(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -238,7 +238,7 @@ pub fn get_record_history(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<Vec<HistoryEntry>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -291,7 +291,7 @@ pub fn save_history_snapshot(
     note: Option<String>,
     state: State<DbState>,
 ) -> Result<(), String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -416,7 +416,7 @@ pub fn bulk_import_records(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<BulkImportResult, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -515,7 +515,7 @@ pub fn preview_import_records(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<Vec<PreviewImportItem>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -574,7 +574,7 @@ pub fn get_activity_records(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
 ) -> Result<Vec<ActivityRecordItem>, String> {
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
@@ -636,7 +636,7 @@ pub fn bulk_quick_replace(
     if search_text.trim().is_empty() {
         return Err("찾을 텍스트가 비어 있습니다.".to_string());
     }
-    let guard = state.0.lock().unwrap();
+    let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
