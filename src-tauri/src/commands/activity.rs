@@ -1,3 +1,4 @@
+use crate::db::with_transaction;
 use crate::state::{DbState, unique_err};
 use crate::types::{ActivityDetail, AreaRef};
 use rusqlite::Connection;
@@ -90,8 +91,7 @@ pub fn create_activities_batch_impl(
     conn: &Connection,
     names: &[String],
 ) -> Result<HashMap<String, i64>, String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
+    with_transaction(conn, || {
         for name in names {
             conn.execute(
                 "INSERT OR IGNORE INTO Activity (name) VALUES (?1)",
@@ -100,14 +100,8 @@ pub fn create_activities_batch_impl(
             .map_err(|e| e.to_string())?;
         }
         Ok(())
-    })();
-    match result {
-        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string())?,
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            return Err(e);
-        }
-    }
+    })?;
+
     let mut map = HashMap::new();
     for name in names {
         let id: i64 = conn
@@ -127,8 +121,7 @@ pub fn set_activity_areas_impl(
     activity_id: i64,
     area_ids: &[i64],
 ) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
+    with_transaction(conn, || {
         conn.execute(
             "DELETE FROM AreaActivity WHERE activity_id = ?1",
             rusqlite::params![activity_id],
@@ -143,14 +136,7 @@ pub fn set_activity_areas_impl(
             .map_err(|e| e.to_string())?;
         }
         Ok(())
-    })();
-    match result {
-        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 // ── Tauri 커맨드 (얇은 래퍼) ─────────────────────────────────

@@ -364,3 +364,29 @@ fn test_apply_default_rules_rejects_invalid_regex() {
     // 롤백되어 앞선 규칙도 남으면 안 된다.
     assert!(fetch_rules_from_db(&conn).unwrap().is_empty());
 }
+
+#[test]
+fn test_apply_default_rules_missing_field_leaves_no_open_transaction() {
+    // 필드가 빠진 규칙을 만나면 오류로 빠져나가는데, 예전에는 ROLLBACK 없이
+    // 빠져나가 트랜잭션이 열린 채 남았다. 공유 Connection이라 그 뒤 모든 쓰기가
+    // 그 트랜잭션에 묶이고 앱 종료 시 통째로 사라진다.
+    let conn = setup_test_db();
+    let rules = vec![
+        serde_json::json!({"oldText": "hello", "newText": "world", "priority": 0}),
+        serde_json::json!({"oldText": "priority가 없는 규칙", "newText": "x"}),
+    ];
+
+    let err = expect_err(apply_default_replace_rules_impl(&conn, &rules));
+    assert!(err.contains("priority"), "에러 메시지: {err}");
+
+    // 트랜잭션이 남아 있으면 BEGIN이 실패한다.
+    match conn.execute_batch("BEGIN") {
+        Ok(_) => {
+            let _ = conn.execute_batch("ROLLBACK");
+        }
+        Err(e) => panic!("트랜잭션이 열린 채 남았다: {e}"),
+    }
+
+    // 앞선 규칙도 롤백되어야 한다.
+    assert!(fetch_rules_from_db(&conn).unwrap().is_empty());
+}

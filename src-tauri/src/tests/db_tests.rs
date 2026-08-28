@@ -160,3 +160,81 @@ fn test_migrate_schema_is_noop_when_already_current() {
     drop(conn);
     let _ = std::fs::remove_file(&path);
 }
+
+// ── with_transaction ─────────────────────────────────────────
+
+/// 트랜잭션이 열린 채 남아 있으면 BEGIN이 실패한다. 그 상태를 감지한다.
+fn transaction_is_open(conn: &Connection) -> bool {
+    match conn.execute_batch("BEGIN") {
+        Ok(_) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            false
+        }
+        Err(_) => true,
+    }
+}
+
+#[test]
+fn test_with_transaction_commits_on_ok() {
+    let conn = crate::tests::setup_test_db();
+    db::with_transaction(&conn, || {
+        conn.execute("INSERT INTO Activity (name) VALUES ('발표')", [])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    })
+    .unwrap();
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM Activity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+    assert!(!transaction_is_open(&conn));
+}
+
+#[test]
+fn test_with_transaction_rolls_back_on_err() {
+    let conn = crate::tests::setup_test_db();
+    let result: Result<(), String> = db::with_transaction(&conn, || {
+        conn.execute("INSERT INTO Activity (name) VALUES ('발표')", [])
+            .map_err(|e| e.to_string())?;
+        Err("중간 실패".to_string())
+    });
+    assert!(result.is_err());
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM Activity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0, "실패하면 삽입이 되돌아가야 한다");
+}
+
+#[test]
+fn test_with_transaction_leaves_no_open_transaction_after_err() {
+    // 트랜잭션이 열린 채 남으면 이후 모든 쓰기가 그 트랜잭션에 묶여
+    // 앱 종료 시 통째로 사라진다. 실패 경로에서도 반드시 닫혀야 한다.
+    let conn = crate::tests::setup_test_db();
+    let _: Result<(), String> = db::with_transaction(&conn, || Err("실패".to_string()));
+
+    assert!(
+        !transaction_is_open(&conn),
+        "실패 후에도 트랜잭션이 닫혀 있어야 한다"
+    );
+}
+
+#[test]
+fn test_with_transaction_early_return_inside_closure_rolls_back() {
+    // 클로저 안에서 `?`로 조기 반환해도 ROLLBACK을 거친다.
+    let conn = crate::tests::setup_test_db();
+    let result: Result<(), String> = db::with_transaction(&conn, || {
+        conn.execute("INSERT INTO Activity (name) VALUES ('발표')", [])
+            .map_err(|e| e.to_string())?;
+        let _missing: &str = None::<&str>.ok_or("필드 누락")?;
+        Ok(())
+    });
+
+    assert!(result.is_err());
+    assert!(!transaction_is_open(&conn));
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM Activity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0);
+}

@@ -1,5 +1,6 @@
 use crate::commands::crypto::resolve_data_key;
 use crate::crypto::maybe_decrypt;
+use crate::db::with_transaction;
 use crate::state::{unique_err, CryptoStateHandle, DbState};
 use crate::types::{InspectRecord, SeedGroupInput, SynonymGroupFull, SynonymWordItem};
 use rusqlite::Connection;
@@ -94,8 +95,7 @@ pub fn add_synonym_words_batch_impl(
     group_id: i64,
     words: &[String],
 ) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
+    with_transaction(conn, || {
         for word in words {
             conn.execute(
                 "INSERT OR IGNORE INTO SynonymItem (group_id, word) VALUES (?1, ?2)",
@@ -104,14 +104,7 @@ pub fn add_synonym_words_batch_impl(
             .map_err(|e| e.to_string())?;
         }
         Ok(())
-    })();
-    match result {
-        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn delete_synonym_word_impl(conn: &Connection, id: i64) -> Result<(), String> {
@@ -124,8 +117,7 @@ pub fn apply_default_synonyms_impl(
     conn: &Connection,
     groups: &[SeedGroupInput],
 ) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
+    with_transaction(conn, || {
         for group in groups {
             let existing_id: Option<i64> = conn
                 .query_row(
@@ -153,15 +145,7 @@ pub fn apply_default_synonyms_impl(
             }
         }
         Ok(())
-    })();
-
-    match result {
-        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn get_all_records_for_inspect_impl(

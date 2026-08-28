@@ -1,4 +1,5 @@
 use crate::commands::config::{get_config_impl, set_config_impl};
+use crate::db::with_transaction;
 use crate::crypto::{decrypt, derive_key, encrypt, generate_salt, maybe_decrypt, maybe_encrypt};
 use crate::state::{
     clear_crypto_state, current_crypto_key, set_crypto_state, CryptoStateHandle, DbPathState,
@@ -51,22 +52,6 @@ const ENCRYPTED_COLUMNS: &[EncryptedColumn] = &[
     },
 ];
 
-fn run_transaction<T>(
-    conn: &Connection,
-    action: impl FnOnce() -> Result<T, String>,
-) -> Result<T, String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    match action() {
-        Ok(value) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(value)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
-}
 
 fn fetch_id_text(conn: &Connection, sql: &str) -> Result<Vec<(i64, String)>, String> {
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
@@ -239,7 +224,7 @@ pub(crate) fn enable_encryption_impl(
     let salt_b64 = B64.encode(salt);
     let verify_token = encrypt(VERIFY_PLAINTEXT, &key)?;
 
-    run_transaction(conn, || {
+    with_transaction(conn, || {
         encrypt_all_data(conn, key)?;
         set_config_impl(conn, KEY_PBKDF2_SALT, &salt_b64)?;
         set_config_impl(conn, KEY_VERIFY_TOKEN, &verify_token)?;
@@ -263,7 +248,7 @@ pub(crate) fn disable_encryption_impl(
     // 백업 쪽이 오히려 덜 위험하다. 실수로 암호화를 끈 경우의 안전망으로 남긴다.
     backup_db_file(db_path_state, "-pre-decrypt")?;
 
-    run_transaction(conn, || {
+    with_transaction(conn, || {
         decrypt_all_data(conn, key)?;
         conn.execute(
             "DELETE FROM APP_CONFIGS WHERE config_key IN (?1, ?2, ?3)",
@@ -303,7 +288,7 @@ pub(crate) fn change_encryption_password_impl(
     let new_salt_b64 = B64.encode(new_salt);
     let new_verify_token = encrypt(VERIFY_PLAINTEXT, &new_key)?;
 
-    run_transaction(conn, || {
+    with_transaction(conn, || {
         decrypt_all_data(conn, old_key)?;
         encrypt_all_data(conn, new_key)?;
         set_config_impl(conn, KEY_PBKDF2_SALT, &new_salt_b64)?;

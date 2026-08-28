@@ -1,12 +1,11 @@
+use crate::db::with_transaction;
 use crate::state::DbState;
 use crate::types::SnapshotItem;
 use rusqlite::Connection;
 use tauri::State;
 
 pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<SnapshotItem, String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-
-    let result: Result<SnapshotItem, String> = (|| {
+    with_transaction(conn, || {
         conn.execute(
             "INSERT INTO ActivityRecordHistory (activity_record_id, content, changed_at, note)
              SELECT r.id, r.content, r.updated_at, NULL
@@ -36,18 +35,7 @@ pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<S
             .map_err(|e| e.to_string())?;
 
         Ok(SnapshotItem { id: snapshot_id, memo, created_at })
-    })();
-
-    match result {
-        Ok(item) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(item)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn get_snapshots_impl(conn: &Connection) -> Result<Vec<SnapshotItem>, String> {
@@ -79,9 +67,7 @@ pub fn restore_snapshot_impl(conn: &Connection, snapshot_id: i64) -> Result<i64,
         )
         .map_err(|_| format!("스냅샷을 찾을 수 없습니다. id={snapshot_id}"))?;
 
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-
-    let result: Result<i64, String> = (|| {
+    with_transaction(conn, || {
         let rows = conn
             .execute(
                 "UPDATE ActivityRecord SET
@@ -98,18 +84,7 @@ pub fn restore_snapshot_impl(conn: &Connection, snapshot_id: i64) -> Result<i64,
             )
             .map_err(|e| e.to_string())?;
         Ok(rows as i64)
-    })();
-
-    match result {
-        Ok(count) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(count)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 #[tauri::command]

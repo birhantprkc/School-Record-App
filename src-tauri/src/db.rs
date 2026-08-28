@@ -21,6 +21,35 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     "", // v0 → v1
 ];
 
+/// BEGIN ~ COMMIT/ROLLBACK을 감싸 트랜잭션이 열린 채 남지 않도록 보장한다.
+///
+/// DB Connection은 Mutex로 공유되는 하나뿐이다. 트랜잭션을 연 채 함수를 빠져나가면
+/// 세션 내내 그 상태로 남아, 이후 모든 BEGIN이 실패하고 트랜잭션 없는 쓰기(셀 편집 등)가
+/// 열린 트랜잭션에 묶인다. 그 상태로 앱을 닫으면 작업이 통째로 롤백된다.
+///
+/// 따라서 트랜잭션 안에서 조기 반환이 필요하면 반드시 클로저 안에서 `?`를 쓴다.
+/// 클로저 밖에서 `?`를 쓰면 ROLLBACK을 건너뛴다.
+pub fn with_transaction<T>(
+    conn: &Connection,
+    action: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+    match action() {
+        Ok(value) => {
+            if let Err(e) = conn.execute_batch("COMMIT") {
+                // COMMIT 실패도 트랜잭션을 열어둔다. 반드시 되돌린다.
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e.to_string());
+            }
+            Ok(value)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
 // ── 내부 헬퍼 ────────────────────────────────────────────────
 
 fn get_version(conn: &Connection) -> Result<u32> {

@@ -1,4 +1,5 @@
 use crate::commands::crypto::resolve_data_key;
+use crate::db::with_transaction;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::state::{CryptoStateHandle, DbState};
 use crate::types::{
@@ -419,17 +420,7 @@ pub fn bulk_import_records(
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     let key = resolve_data_key(conn, &crypto)?;
 
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    match bulk_import_records_impl(conn, &records, key) {
-        Ok(r) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(r)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    with_transaction(conn, || bulk_import_records_impl(conn, &records, key))
 }
 
 pub fn preview_import_records_impl(
@@ -647,18 +638,7 @@ pub fn bulk_quick_replace(
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
     let key = resolve_data_key(conn, &crypto)?;
 
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    match bulk_quick_replace_impl(conn, area_id, &search_text, &replace_with, key) {
-        Ok(count) => {
-            if let Err(e) = conn.execute_batch("COMMIT") {
-                let _ = conn.execute_batch("ROLLBACK");
-                return Err(e.to_string());
-            }
-            Ok(count)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    with_transaction(conn, || {
+        bulk_quick_replace_impl(conn, area_id, &search_text, &replace_with, key)
+    })
 }

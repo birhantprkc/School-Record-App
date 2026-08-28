@@ -1,4 +1,5 @@
 use crate::commands::crypto::resolve_data_key;
+use crate::db::with_transaction;
 use crate::commands::record::save_snapshot_internal;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::engine::{
@@ -130,36 +131,31 @@ pub fn apply_default_replace_rules_impl(
     conn: &Connection,
     rules: &[serde_json::Value],
 ) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    for rule in rules {
-        let old_text = rule["oldText"].as_str().ok_or("oldText 누락")?;
-        let new_text = rule["newText"].as_str().ok_or("newText 누락")?;
-        let priority = rule["priority"].as_i64().ok_or("priority 누락")?;
-        let is_regex: i64 = if rule["isRegex"].as_bool().unwrap_or(false) {
-            1
-        } else {
-            0
-        };
-        // 이 경로는 validate_replace_rule을 거치지 않는다. 여기서 막지 않으면
-        // 컴파일되지 않는 정규식이 DB에 들어가 조용히 무시된다.
-        if is_regex == 1 {
-            if let Err(e) = Regex::new(old_text) {
-                let _ = conn.execute_batch("ROLLBACK");
-                return Err(format!(
-                    "기본 규칙의 정규식이 올바르지 않습니다 (패턴 '{old_text}'): {e}"
-                ));
+    with_transaction(conn, || {
+        for rule in rules {
+            let old_text = rule["oldText"].as_str().ok_or("oldText 누락")?;
+            let new_text = rule["newText"].as_str().ok_or("newText 누락")?;
+            let priority = rule["priority"].as_i64().ok_or("priority 누락")?;
+            let is_regex: i64 = if rule["isRegex"].as_bool().unwrap_or(false) {
+                1
+            } else {
+                0
+            };
+            // 이 경로는 validate_replace_rule을 거치지 않는다. 여기서 막지 않으면
+            // 컴파일되지 않는 정규식이 DB에 들어가 조용히 무시된다.
+            if is_regex == 1 {
+                Regex::new(old_text).map_err(|e| {
+                    format!("기본 규칙의 정규식이 올바르지 않습니다 (패턴 '{old_text}'): {e}")
+                })?;
             }
+            conn.execute(
+                "INSERT OR IGNORE INTO ReplaceRule (old_text, new_text, is_regex, priority) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![old_text, new_text, is_regex, priority],
+            )
+            .map_err(|e| e.to_string())?;
         }
-        conn.execute(
-            "INSERT OR IGNORE INTO ReplaceRule (old_text, new_text, is_regex, priority) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![old_text, new_text, is_regex, priority],
-        )
-        .map_err(|e| {
-            let _ = conn.execute_batch("ROLLBACK");
-            e.to_string()
-        })?;
-    }
-    conn.execute_batch("COMMIT").map_err(|e| e.to_string())
+        Ok(())
+    })
 }
 
 #[tauri::command]
@@ -337,8 +333,7 @@ pub fn apply_replace_impl(
         return Ok(ReplaceApplyResult { changed_count: 0, total_count });
     }
 
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result: Result<(), String> = (|| {
+    with_transaction(conn, || {
         for (activity_id, student_id, plain_content) in &changes {
             save_snapshot_internal(conn, *activity_id, *student_id, Some("치환 적용 전"))?;
 
@@ -353,19 +348,8 @@ pub fn apply_replace_impl(
             )
             .map_err(|e| e.to_string())?;
         }
-        Ok(())
-    })();
-
-    match result {
-        Ok(_) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(ReplaceApplyResult { changed_count, total_count })
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+        Ok(ReplaceApplyResult { changed_count, total_count })
+    })
 }
 
 #[tauri::command]

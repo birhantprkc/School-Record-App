@@ -1,5 +1,6 @@
 use crate::commands::crypto::resolve_data_key;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
+use crate::db::with_transaction;
 use crate::state::{unique_err, CryptoStateHandle, DbState};
 use crate::types::{BulkUpsertResult, StudentInput, StudentItem};
 use rusqlite::Connection;
@@ -100,8 +101,7 @@ pub fn bulk_upsert_students_impl(
     students: &[StudentInput],
     key: Option<[u8; 32]>,
 ) -> Result<BulkUpsertResult, String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<BulkUpsertResult, String> {
+    with_transaction(conn, || {
         let mut inserted: i64 = 0;
         let mut updated: i64 = 0;
         for s in students.iter() {
@@ -125,17 +125,7 @@ pub fn bulk_upsert_students_impl(
             }
         }
         Ok(BulkUpsertResult { inserted, updated })
-    })();
-    match result {
-        Ok(r) => {
-            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-            Ok(r)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn get_area_students_impl(conn: &Connection, area_id: i64) -> Result<Vec<i64>, String> {
@@ -157,8 +147,7 @@ pub fn set_area_students_impl(
     area_id: i64,
     student_ids: &[i64],
 ) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
+    with_transaction(conn, || {
         conn.execute(
             "DELETE FROM AreaStudent WHERE area_id = ?1",
             rusqlite::params![area_id],
@@ -173,14 +162,7 @@ pub fn set_area_students_impl(
             .map_err(|e| e.to_string())?;
         }
         Ok(())
-    })();
-    match result {
-        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn set_area_activities_impl(
@@ -188,8 +170,7 @@ pub fn set_area_activities_impl(
     area_id: i64,
     activity_ids: &[i64],
 ) -> Result<(), String> {
-    conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
+    with_transaction(conn, || {
         conn.execute(
             "DELETE FROM AreaActivity WHERE area_id = ?1",
             rusqlite::params![area_id],
@@ -204,14 +185,7 @@ pub fn set_area_activities_impl(
             .map_err(|e| e.to_string())?;
         }
         Ok(())
-    })();
-    match result {
-        Ok(_) => conn.execute_batch("COMMIT").map_err(|e| e.to_string()),
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
 }
 
 // ── Tauri 커맨드 (얇은 래퍼) ─────────────────────────────────
