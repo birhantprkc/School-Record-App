@@ -440,8 +440,32 @@ fn test_resolve_data_key_requires_unlock_when_enabled() {
     assert!(err.contains("잠금"), "에러 메시지: {err}");
 }
 
+/// tmp_dir 안에 주어진 접미사를 가진 백업 파일이 있는지 확인한다.
+fn backup_exists(tmp_dir: &std::path::Path, suffix: &str) -> bool {
+    std::fs::read_dir(tmp_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .any(|e| e.file_name().to_string_lossy().contains(suffix))
+}
+
 #[test]
-fn test_change_password_creates_backup_file() {
+fn test_enable_encryption_removes_plaintext_backup() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+
+    // 평문 사본이 DB 옆에 남으면 암호화를 켠 의미가 없다.
+    assert!(
+        !backup_exists(&tmp_dir, "-pre-encrypt"),
+        "암호화에 성공하면 평문 백업이 남아 있으면 안 된다"
+    );
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_change_password_removes_old_key_backup() {
     let conn = setup_test_db();
     let crypto = crypto_state(None);
 
@@ -449,15 +473,28 @@ fn test_change_password_creates_backup_file() {
     enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
     change_encryption_password_impl(&conn, &crypto, &db_path, "password", "new-password").unwrap();
 
-    let backup_exists = std::fs::read_dir(&tmp_dir)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .any(|e| {
-            e.file_name()
-                .to_string_lossy()
-                .contains("-pre-reencrypt")
-        });
-    assert!(backup_exists, "비밀번호 변경 전 백업 파일이 생성되어야 한다");
+    // 이 백업은 옛 비밀번호로 계속 열리므로 남기면 비밀번호 변경이 무의미해진다.
+    assert!(
+        !backup_exists(&tmp_dir, "-pre-reencrypt"),
+        "비밀번호 변경에 성공하면 옛 키로 열리는 백업이 남아 있으면 안 된다"
+    );
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_disable_encryption_keeps_backup() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+    disable_encryption_impl(&conn, &crypto, &db_path).unwrap();
+
+    // 암호문 사본이고 본 DB가 평문이 되므로, 실수 복구용 안전망으로 남긴다.
+    assert!(
+        backup_exists(&tmp_dir, "-pre-decrypt"),
+        "암호화 해제 전 백업은 남아 있어야 한다"
+    );
     std::fs::remove_dir_all(&tmp_dir).ok();
 }
 

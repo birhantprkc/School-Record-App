@@ -6,6 +6,7 @@ use crate::state::{
 };
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use rusqlite::Connection;
+use std::path::{Path, PathBuf};
 use tauri::State;
 use zeroize::Zeroizing;
 
@@ -187,15 +188,33 @@ pub(crate) fn unlock_encryption_impl(
     set_crypto_state(crypto, key)
 }
 
-fn backup_db_file(db_path_state: &DbPathState, suffix: &str) -> Result<(), String> {
+/// DB 파일을 같은 폴더에 복사하고 그 경로를 반환한다.
+///
+/// 반환한 경로는 반드시 받아야 한다. `-pre-encrypt`와 `-pre-reencrypt` 백업은
+/// 작업이 성공하면 지워야 하기 때문이다. 이유는 각 호출부 주석 참고.
+fn backup_db_file(db_path_state: &DbPathState, suffix: &str) -> Result<PathBuf, String> {
     let guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = guard.as_ref().ok_or("열린 프로젝트가 없습니다.")?;
     let parent = src.parent().ok_or("DB 파일의 상위 디렉토리를 찾을 수 없습니다.")?;
     let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("backup");
     let ts = chrono::Local::now().format("%y%m%d-%H%M").to_string();
     let bak_name = format!("{stem}.{ts}{suffix}.db.backup");
-    std::fs::copy(src, parent.join(bak_name)).map_err(|e| e.to_string())?;
-    Ok(())
+    let dest = parent.join(bak_name);
+    std::fs::copy(src, &dest).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
+/// 작업이 성공한 뒤 백업을 지운다.
+///
+/// 삭제 실패를 조용히 넘기면 사용자는 백업이 사라진 줄 알지만 실제로는 남아 있게
+/// 된다. 그 상태가 바로 이 수정이 없애려는 상황이므로 반드시 오류로 알린다.
+fn remove_backup_after_success(path: &Path, what: &str) -> Result<(), String> {
+    std::fs::remove_file(path).map_err(|e| {
+        format!(
+            "{what}는 완료했지만 백업 파일을 삭제하지 못했습니다. 직접 삭제해주세요: {} ({e})",
+            path.display()
+        )
+    })
 }
 
 pub(crate) fn enable_encryption_impl(
@@ -211,7 +230,9 @@ pub(crate) fn enable_encryption_impl(
         return Err("이미 암호화가 활성화되어 있습니다.".to_string());
     }
 
-    backup_db_file(db_path_state, "-pre-encrypt")?;
+    // 암호화 도중 실패하면 되돌릴 수 있도록 평문 상태를 복사해 둔다.
+    // 성공하면 반드시 지운다 — 평문 사본이 DB 옆에 남으면 암호화를 켠 의미가 없다.
+    let backup = backup_db_file(db_path_state, "-pre-encrypt")?;
 
     let salt = generate_salt();
     let key = derive_key(password, &salt);
@@ -224,9 +245,11 @@ pub(crate) fn enable_encryption_impl(
         set_config_impl(conn, KEY_VERIFY_TOKEN, &verify_token)?;
         set_config_impl(conn, KEY_ENCRYPTION_ENABLED, "true")?;
         Ok(())
-    })?;
+    })
+    .map_err(|e| format!("{e}\n복구용 평문 백업이 남아 있습니다: {}", backup.display()))?;
 
-    set_crypto_state(crypto, key)
+    set_crypto_state(crypto, key)?;
+    remove_backup_after_success(&backup, "암호화")
 }
 
 pub(crate) fn disable_encryption_impl(
@@ -236,6 +259,8 @@ pub(crate) fn disable_encryption_impl(
 ) -> Result<(), String> {
     let key = resolve_data_key(conn, crypto)?.ok_or("암호화가 활성화되어 있지 않습니다.")?;
 
+    // 이 백업은 지우지 않는다. 암호문 사본이고, 성공하면 본 DB가 평문이 되므로
+    // 백업 쪽이 오히려 덜 위험하다. 실수로 암호화를 끈 경우의 안전망으로 남긴다.
     backup_db_file(db_path_state, "-pre-decrypt")?;
 
     run_transaction(conn, || {
@@ -269,7 +294,9 @@ pub(crate) fn change_encryption_password_impl(
         "현재 비밀번호가 올바르지 않습니다.",
     )?;
 
-    backup_db_file(db_path_state, "-pre-reencrypt")?;
+    // 이 백업은 옛 비밀번호로 계속 열린다. 비밀번호가 새어서 바꾼 경우라면
+    // 백업을 남겨두는 것이 변경 자체를 무의미하게 만들므로 성공 시 지운다.
+    let backup = backup_db_file(db_path_state, "-pre-reencrypt")?;
 
     let new_salt = generate_salt();
     let new_key = derive_key(new_password, &new_salt);
@@ -282,9 +309,11 @@ pub(crate) fn change_encryption_password_impl(
         set_config_impl(conn, KEY_PBKDF2_SALT, &new_salt_b64)?;
         set_config_impl(conn, KEY_VERIFY_TOKEN, &new_verify_token)?;
         Ok(())
-    })?;
+    })
+    .map_err(|e| format!("{e}\n복구용 백업이 남아 있습니다: {}", backup.display()))?;
 
-    set_crypto_state(crypto, new_key)
+    set_crypto_state(crypto, new_key)?;
+    remove_backup_after_success(&backup, "비밀번호 변경")
 }
 
 fn db_conn<'a>(guard: &'a Option<Connection>) -> Result<&'a Connection, String> {
