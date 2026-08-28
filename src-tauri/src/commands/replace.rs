@@ -3,6 +3,7 @@ use crate::commands::record::save_snapshot_internal;
 use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::engine::{
     apply_rules_cached, detect_conflicts, fetch_rules_from_db, get_records_for_scope,
+    validate_rules,
 };
 use crate::state::{CryptoStateHandle, DbState, ReplaceCache, ReplaceCacheState};
 use crate::types::{ReplaceApplyResult, ReplacePreviewItem, ReplaceRule};
@@ -139,6 +140,16 @@ pub fn apply_default_replace_rules_impl(
         } else {
             0
         };
+        // 이 경로는 validate_replace_rule을 거치지 않는다. 여기서 막지 않으면
+        // 컴파일되지 않는 정규식이 DB에 들어가 조용히 무시된다.
+        if is_regex == 1 {
+            if let Err(e) = Regex::new(old_text) {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(format!(
+                    "기본 규칙의 정규식이 올바르지 않습니다 (패턴 '{old_text}'): {e}"
+                ));
+            }
+        }
         conn.execute(
             "INSERT OR IGNORE INTO ReplaceRule (old_text, new_text, is_regex, priority) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![old_text, new_text, is_regex, priority],
@@ -248,6 +259,8 @@ pub fn preview_replace_impl(
     cache: &mut ReplaceCache,
 ) -> Result<Vec<ReplacePreviewItem>, String> {
     let rules = fetch_rules_from_db(conn)?;
+    // 잘못된 정규식은 apply_rules가 조용히 건너뛴다. 적용 전에 먼저 알린다.
+    validate_rules(&rules)?;
     let records = get_records_for_scope(conn, scope_type, area_ids, key)?;
 
     let mut act_names: HashMap<i64, String> = HashMap::new();
@@ -302,6 +315,8 @@ pub fn apply_replace_impl(
     cache: &mut ReplaceCache,
 ) -> Result<ReplaceApplyResult, String> {
     let rules = fetch_rules_from_db(conn)?;
+    // 잘못된 정규식은 apply_rules가 조용히 건너뛴다. 적용 전에 먼저 알린다.
+    validate_rules(&rules)?;
     let records = get_records_for_scope(conn, scope_type, area_ids, key)?;
     let total_count = records.len() as i64;
 

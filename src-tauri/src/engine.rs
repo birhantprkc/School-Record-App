@@ -50,6 +50,22 @@ pub fn apply_rules(content: &str, rules: &[ReplaceRule]) -> String {
     result
 }
 
+/// 규칙 목록의 정규식이 모두 컴파일되는지 검사한다.
+///
+/// `apply_rules`는 컴파일에 실패한 규칙을 조용히 건너뛴다. 그대로 두면 사용자는
+/// 치환이 적용된 줄 알게 되므로, 실제로 적용하기 전에 여기서 걸러 알린다.
+pub fn validate_rules(rules: &[ReplaceRule]) -> Result<(), String> {
+    for rule in rules.iter().filter(|r| r.enabled && r.is_regex) {
+        Regex::new(&rule.old_text).map_err(|e| {
+            format!(
+                "정규식 규칙이 올바르지 않습니다 (패턴 '{}'): {e}",
+                rule.old_text
+            )
+        })?;
+    }
+    Ok(())
+}
+
 pub fn apply_rules_cached(content: &str, rules: &[ReplaceRule], cache: &mut ReplaceCache) -> String {
     if content.is_empty() {
         return String::new();

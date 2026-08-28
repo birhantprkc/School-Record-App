@@ -1,6 +1,6 @@
 use crate::engine::{
     apply_rules, apply_rules_cached, detect_conflicts, fetch_rules_from_db,
-    get_records_for_scope,
+    get_records_for_scope, validate_rules,
 };
 use crate::state::{ReplaceCache, MAX_CACHE_ENTRIES};
 use crate::types::ReplaceRule;
@@ -330,4 +330,32 @@ fn test_cached_clears_when_entry_limit_reached() {
     let _ = apply_rules_cached("마지막", &rules, &mut cache);
     assert_eq!(cache.entries.len(), 1);
     assert!(cache.entries.contains_key("마지막"));
+}
+
+// ── validate_rules ───────────────────────────────────────────
+
+#[test]
+fn test_validate_rules_accepts_valid_regex() {
+    let rules = vec![make_regex_rule(1, r"\d+", "N", true, 0)];
+    assert!(validate_rules(&rules).is_ok());
+}
+
+#[test]
+fn test_validate_rules_rejects_invalid_regex() {
+    let rules = vec![make_regex_rule(1, r"[invalid(", "x", true, 0)];
+    let err = validate_rules(&rules).unwrap_err();
+    assert!(
+        err.contains("[invalid("),
+        "어떤 패턴이 문제인지 알려줘야 한다: {err}"
+    );
+}
+
+#[test]
+fn test_validate_rules_ignores_disabled_and_literal_rules() {
+    // 꺼진 규칙은 적용되지 않고, 리터럴 규칙은 정규식으로 해석되지 않는다.
+    let rules = vec![
+        make_regex_rule(1, r"[invalid(", "x", false, 0),
+        make_rule(2, r"[invalid(", "x", true, 1),
+    ];
+    assert!(validate_rules(&rules).is_ok());
 }

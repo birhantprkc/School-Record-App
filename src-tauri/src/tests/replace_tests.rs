@@ -1,9 +1,37 @@
 use crate::commands::replace::{
-    apply_default_replace_rules_impl, create_replace_rule_db, delete_replace_rule_impl,
-    get_replace_rules_impl, update_replace_rule_db, validate_replace_rule,
+    apply_default_replace_rules_impl, apply_replace_impl, create_replace_rule_db,
+    delete_replace_rule_impl, get_replace_rules_impl, preview_replace_impl, update_replace_rule_db,
+    validate_replace_rule,
 };
 use crate::engine::{apply_rules, fetch_rules_from_db, get_records_for_scope};
+use crate::state::ReplaceCache;
+use std::collections::HashMap;
 use super::{insert_activity, insert_record, insert_student, setup_test_db};
+
+/// validate_replace_rule을 우회해 DB에 직접 넣는다.
+/// 구버전에서 저장되었거나 외부에서 들어온 규칙을 흉내 낸다.
+fn insert_raw_regex_rule(conn: &rusqlite::Connection, pattern: &str) {
+    conn.execute(
+        "INSERT INTO ReplaceRule (old_text, new_text, is_regex, priority) VALUES (?1, 'x', 1, 0)",
+        rusqlite::params![pattern],
+    )
+    .unwrap();
+}
+
+fn empty_cache() -> ReplaceCache {
+    ReplaceCache {
+        ruleset_version: 0,
+        entries: HashMap::new(),
+    }
+}
+
+/// unwrap_err는 Ok 타입에 Debug를 요구한다. 반환 타입에 Debug를 붙이지 않기 위해 직접 꺼낸다.
+fn expect_err<T>(result: Result<T, String>) -> String {
+    match result {
+        Ok(_) => panic!("오류가 나야 하는데 성공했다"),
+        Err(e) => e,
+    }
+}
 
 // ── validate_replace_rule (순수 함수) ──────────────────────────
 
@@ -300,4 +328,39 @@ fn test_apply_default_rules_does_not_duplicate_existing_default() {
         .query_row("SELECT COUNT(*) FROM ReplaceRule", [], |r| r.get(0))
         .unwrap();
     assert_eq!(count, 1, "old_text+new_text가 동일한 기본 규칙은 중복 삽입되지 않아야 함");
+}
+
+// ── 잘못된 정규식은 조용히 넘어가지 않는다 ────────────────────
+
+#[test]
+fn test_preview_replace_rejects_invalid_regex_rule() {
+    let conn = setup_test_db();
+    insert_raw_regex_rule(&conn, "[invalid(");
+
+    let err = expect_err(preview_replace_impl(&conn, "all", &[], None, &mut empty_cache()));
+    assert!(err.contains("정규식"), "에러 메시지: {err}");
+}
+
+#[test]
+fn test_apply_replace_rejects_invalid_regex_rule() {
+    let conn = setup_test_db();
+    insert_raw_regex_rule(&conn, "[invalid(");
+
+    let err = expect_err(apply_replace_impl(&conn, "all", &[], None, &mut empty_cache()));
+    assert!(err.contains("정규식"), "에러 메시지: {err}");
+}
+
+#[test]
+fn test_apply_default_rules_rejects_invalid_regex() {
+    let conn = setup_test_db();
+    let rules = vec![
+        serde_json::json!({"oldText": "hello", "newText": "world", "priority": 0, "isRegex": false}),
+        serde_json::json!({"oldText": "[invalid(", "newText": "x", "priority": 1, "isRegex": true}),
+    ];
+
+    let err = apply_default_replace_rules_impl(&conn, &rules).unwrap_err();
+    assert!(err.contains("정규식"), "에러 메시지: {err}");
+
+    // 롤백되어 앞선 규칙도 남으면 안 된다.
+    assert!(fetch_rules_from_db(&conn).unwrap().is_empty());
 }
