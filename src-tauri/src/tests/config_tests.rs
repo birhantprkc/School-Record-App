@@ -1,4 +1,4 @@
-use crate::commands::config::{get_config_impl, get_configs_impl, set_config_impl, check_and_update_app_version_impl};
+use crate::commands::config::{ensure_not_protected, get_config_impl, get_configs_impl, set_config_impl, check_and_update_app_version_impl};
 use super::setup_test_db;
 
 #[test]
@@ -236,4 +236,47 @@ fn test_get_configs_matches_get_config_for_toolbar_keys() {
         assert_eq!(bulk.get(k), Some(&v.to_string()));
         assert_eq!(get_config_impl(&conn, k).unwrap(), Some(v.to_string()));
     }
+}
+
+// ── ensure_not_protected ─────────────────────────────────────────
+
+#[test]
+fn test_ensure_not_protected_blocks_encryption_keys() {
+    for key in [
+        "encryption_enabled",
+        "encryption_pbkdf2_salt",
+        "encryption_verify_token",
+    ] {
+        assert!(ensure_not_protected(key).is_err(), "{key}는 차단되어야 한다");
+    }
+}
+
+#[test]
+fn test_ensure_not_protected_allows_preference_keys() {
+    for key in [
+        "app_version",
+        "theme_mode",
+        "record_freeze_columns",
+        "export_c_separator",
+    ] {
+        assert!(ensure_not_protected(key).is_ok(), "{key}는 허용되어야 한다");
+    }
+}
+
+#[test]
+fn test_ensure_not_protected_error_message_names_key() {
+    let err = ensure_not_protected("encryption_pbkdf2_salt").unwrap_err();
+    assert!(err.contains("encryption_pbkdf2_salt"));
+}
+
+#[test]
+fn test_impl_layer_still_reaches_protected_keys() {
+    // 차단은 커맨드 계층 전용이다. crypto 모듈이 salt를 읽고 쓰는 정상 경로이므로
+    // impl 계층까지 막으면 암호화 자체가 동작하지 않는다.
+    let conn = setup_test_db();
+    set_config_impl(&conn, "encryption_pbkdf2_salt", "c2FsdA==").unwrap();
+    assert_eq!(
+        get_config_impl(&conn, "encryption_pbkdf2_salt").unwrap(),
+        Some("c2FsdA==".to_string())
+    );
 }
