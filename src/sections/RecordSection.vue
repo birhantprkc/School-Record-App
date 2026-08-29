@@ -27,6 +27,7 @@ const collapsedActivities = ref(new Set())
 
 const settingError = ref('')
 const copyError = ref('')
+const saveError = ref('')
 
 // 토글 저장 실패를 사용자에게 알린다. 저장에 성공했을 때만 true.
 async function setToolbarOption(name, value) {
@@ -42,6 +43,16 @@ async function setToolbarOption(name, value) {
 
 const FONT_SIZE_MIN = 10
 const FONT_SIZE_MAX = 28
+
+// setTheme은 저장 실패 시 되돌리고 던진다. 토글 버튼에서 이를 알린다.
+async function toggleTheme() {
+  settingError.value = ''
+  try {
+    await configStore.setTheme(configStore.theme === 'dark' ? 'light' : 'dark')
+  } catch (e) {
+    settingError.value = `설정을 저장하지 못했습니다: ${e}`
+  }
+}
 
 async function changeFontSize(delta) {
   const next = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, configStore.recordCellFontSize + delta))
@@ -72,22 +83,31 @@ onMounted(async () => {
     resizeObserver = new ResizeObserver(onRootResize)
     resizeObserver.observe(rootEl.value)
   }
-  await areaStore.fetchAreas()
+  try {
+    await areaStore.fetchAreas()
+  } catch (e) {
+    // 영역을 못 불러오면 드롭다운이 비어 "영역이 없음"과 구분되지 않는다.
+    loadError.value = `영역 목록을 불러오지 못했습니다: ${String(e)}`
+  }
 })
 
-function clearAllTimers() {
-  debounceTimers.forEach(t => clearTimeout(t))
-  debounceTimers.clear()
-}
-
 onBeforeUnmount(() => {
-  clearAllTimers()
+  // 언마운트는 동기라 await할 수 없다. flush를 걸어두면 invoke는 이미 발행되므로
+  // 컴포넌트가 사라져도 저장은 끝까지 진행된다. 실패는 삼키지 않고 남긴다.
+  flushPendingDebounces().catch(e => {
+    console.error('미저장 셀 flush 실패:', e)
+  })
   stopObservingResize()
 })
 
+// 영역 id로 최신 여부를 판별하면 A→B→A 전환에서 구멍이 난다. id가 같아 통과해버려,
+// 아주 늦게 도착한 옛 A 응답이 그 사이 입력한 키를 덮어쓴다. 세대 번호로 판별한다.
+let gridGen = 0
+
 async function reloadGrid(id) {
+  const myGen = ++gridGen
   await recordStore.fetchAreaGrid(id)
-  if (selectedAreaId.value !== id) return
+  if (myGen !== gridGen) return
   // 늦게 도착한 응답은 store에 반영되지 않는다. 아직 아무것도 실린 적이 없으면
   // gridData가 null이므로, 최신 응답이 도착할 때까지 재구성을 미룬다.
   if (!recordStore.gridData) return
@@ -100,7 +120,14 @@ async function reloadGrid(id) {
 }
 
 watch(selectedAreaId, async (id) => {
-  clearAllTimers()
+  // 영역을 바꾸기 전에 미저장 셀을 먼저 저장한다. 실패하면 전환을 멈추고 알린다 —
+  // 여기서 조용히 넘어가면 방금 쓴 내용이 사라진다.
+  try {
+    await flushPendingDebounces()
+  } catch (e) {
+    loadError.value = `이전 영역의 미저장 내용을 저장하지 못했습니다: ${String(e)}`
+    return
+  }
   loadError.value = ''
   if (!id) {
     recordStore.gridData = null
@@ -311,6 +338,9 @@ function onGridWheel(event) {
 
 async function saveCell(activityId, studentId, content) {
   const key = cellKey(activityId, studentId)
+  // 타이머가 발동했으므로 대기 목록에서 뺀다. 남겨두면 이후 flush마다
+  // 마운트 이후 편집한 모든 셀을 다시 저장하게 된다.
+  debounceTimers.delete(key)
   const stateMap = new Map(savingState.value)
   stateMap.set(key, 'saving')
   savingState.value = stateMap
@@ -319,6 +349,7 @@ async function saveCell(activityId, studentId, content) {
     const next = new Map(savingState.value)
     next.set(key, 'saved')
     savingState.value = next
+    saveError.value = ''
     setTimeout(() => {
       const clear = new Map(savingState.value)
       clear.delete(key)
@@ -328,6 +359,9 @@ async function saveCell(activityId, studentId, content) {
     const next = new Map(savingState.value)
     next.set(key, 'error')
     savingState.value = next
+    // 빨간 셀만으로는 "디스크 가득참"과 "DB 잠김"을 구분할 수 없다.
+    // 메시지를 버리지 않고 사용자에게 보여준다.
+    saveError.value = `저장하지 못했습니다: ${String(e)}`
   }
 }
 
@@ -592,12 +626,21 @@ function isNewGroup(students, index) {
           <button
               class="flex items-center justify-center py-2.5 px-3.5 rounded-lg border bg-transparent cursor-pointer transition-[background-color,color,border-color] text-ink-3 border-line hover:bg-line hover:text-ink-2"
               :title="configStore.theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'"
-              @click="configStore.setTheme(configStore.theme === 'dark' ? 'light' : 'dark')"
+              @click="toggleTheme"
           >
             <Sun v-if="configStore.theme === 'dark'" :size="15"/>
             <Moon v-else :size="15"/>
           </button>
         </div>
+      </div>
+
+      <!-- 셀 저장 실패 알림. 설정 저장 실패와 달리 작성 내용이 걸린 문제이므로
+           경고(amber)가 아니라 오류(red)로, 별도 줄에 띄운다. -->
+      <div
+          v-if="saveError"
+          class="px-6 py-2 border-b border-line-2 shrink-0 bg-red/[0.08]"
+      >
+        <p class="text-base text-red m-0">{{ saveError }}</p>
       </div>
 
       <!-- 설정 저장/로드·클립보드 복사 실패 알림 -->

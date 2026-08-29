@@ -8,6 +8,8 @@ import BaseModal from './BaseModal.vue'
 import {useFileStore} from '../stores/file.js'
 import {useStudentStore} from '../stores/student.js'
 import {SAMPLE_CSV} from '../data/sampleStudentCsv.ts'
+import {STUDENT_COL_ALIASES} from '../data/columnAliases'
+import {isValidIdentityPart} from '../services/studentId'
 
 const props = defineProps({
   area: {type: Object, required: true},
@@ -92,12 +94,9 @@ const excelError = ref('')
 const excelStatus = ref(null) // { selected: N, newlyAdded: M } | null
 const parsing = ref(false)
 
-const COL_ALIASES = {
-  grade: ['학년', 'grade'],
-  classNum: ['반', 'class', '학급', '반번호', 'classnum', 'class_num'],
-  number: ['번호', 'number', 'num', '번', '출석번호'],
-  name: ['이름', 'name', '성명', '학생명', '학생이름'],
-}
+// 중앙 별칭표를 그대로 쓴다. 여기에 재선언해 두면 별칭을 중앙에 추가해도
+// 이 경로에서만 조용히 인식되지 않는다(columnAliases.ts의 주석 참고).
+const COL_ALIASES = STUDENT_COL_ALIASES
 
 function openExcelView() {
   excelError.value = ''
@@ -289,7 +288,8 @@ async function processFile(file) {
             number: Number(row[ni]),
             name: String(row[nmi] ?? '').trim(),
           }))
-          .filter(r => r.grade >= 1 && r.classNum >= 1 && r.number >= 1 && r.name)
+          .filter(r => isValidIdentityPart(r.grade) && isValidIdentityPart(r.classNum)
+              && isValidIdentityPart(r.number) && r.name)
 
       if (parsedRows.length === 0) {
         excelError.value = '유효한 학생 데이터가 없습니다. 학년·반·번호·이름을 모두 확인해 주세요.'
@@ -322,6 +322,12 @@ async function processFile(file) {
     } finally {
       parsing.value = false
     }
+  }
+  // onerror가 없으면 읽기 실패 시 parsing이 true로 남아 "분석하는 중..."이
+  // 영원히 돌고 뒤로가기 버튼도 잠긴다.
+  reader.onerror = () => {
+    excelError.value = '파일을 읽지 못했습니다. 파일이 열려 있거나 접근 권한이 없을 수 있습니다.'
+    parsing.value = false
   }
   reader.readAsArrayBuffer(file)
 }

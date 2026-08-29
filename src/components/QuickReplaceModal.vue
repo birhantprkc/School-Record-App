@@ -73,7 +73,14 @@ const hasChanges = computed(() => previewItems.value.length > 0)
 async function commitSearch() {
   const q = searchText.value
   if (!q) return
-  await props.flushPending()
+  // flush가 실패했는데 그대로 진행하면, 미저장 내용이 빠진 DB를 대상으로
+  // 치환하게 된다. 실패하면 검색을 멈추고 알린다.
+  try {
+    await props.flushPending()
+  } catch (e) {
+    applyError.value = `미저장 내용을 저장하지 못했습니다: ${String(e)}`
+    return
+  }
   committedSearch.value = q
   applyError.value = ''
 }

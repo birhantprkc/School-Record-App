@@ -26,8 +26,9 @@ const recordModalVisible = ref(false)
 const recordModalActivity = ref(null)
 
 onMounted(() => {
-  activityStore.fetchActivities()
-  areaStore.fetchAreas()
+  // 실패는 store의 error를 통해 화면에 표시된다. 여기서는 rejection만 흡수한다.
+  activityStore.fetchActivities().catch(() => {})
+  areaStore.fetchAreas().catch(() => {})
 })
 
 function openAddModal() {

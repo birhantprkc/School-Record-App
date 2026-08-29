@@ -9,6 +9,26 @@ const config = useConfigStore()
 const showPasswordModal = ref(false)
 const passwordModalMode = ref('setup')
 const passwordError = ref('')
+// 테마·구분자 저장 실패를 알린다. 예전에는 실패해도 아무 표시가 없었다.
+const settingError = ref('')
+
+async function changeTheme(mode) {
+  settingError.value = ''
+  try {
+    await config.setTheme(mode)
+  } catch (e) {
+    settingError.value = `설정을 저장하지 못했습니다: ${e}`
+  }
+}
+
+async function changeExportSeparator(value) {
+  settingError.value = ''
+  try {
+    await config.setExportCSeparator(value)
+  } catch (e) {
+    settingError.value = `설정을 저장하지 못했습니다: ${e}`
+  }
+}
 const passwordLoading = ref(false)
 const statusEncryptMessage = ref('')
 const confirmEncryptDisable = ref(false)
@@ -69,6 +89,14 @@ async function handlePasswordSubmit(payload) {
 <template>
   <div class="flex flex-col h-full overflow-hidden box-border">
 
+    <!-- 설정 저장 실패 알림 -->
+    <div
+        v-if="settingError || config.preferencesError"
+        class="px-10 py-2 border-b border-line-2 shrink-0 bg-amber/[0.08]"
+    >
+      <p class="text-base text-amber m-0">{{ settingError || config.preferencesError }}</p>
+    </div>
+
     <!-- 섹션 헤더 -->
     <div class="flex items-start justify-between px-10 py-9 border-b border-line flex-shrink-0 gap-4">
       <div>
@@ -100,7 +128,7 @@ async function handlePasswordSubmit(payload) {
                   ? 'bg-raised border-line-2 text-ink'
                   : 'bg-transparent border-line text-ink-4 hover:bg-line/40'
               ]"
-              @click="config.setTheme('dark')"
+              @click="changeTheme('dark')"
           >
             <Moon :size="16"/>
             다크
@@ -112,7 +140,7 @@ async function handlePasswordSubmit(payload) {
                   ? 'bg-raised border-line-2 text-ink'
                   : 'bg-transparent border-line text-ink-4 hover:bg-line/40'
               ]"
-              @click="config.setTheme('light')"
+              @click="changeTheme('light')"
           >
             <Sun :size="16"/>
             라이트
@@ -140,7 +168,7 @@ async function handlePasswordSubmit(payload) {
             <select
                 class="text-base text-ink-2 bg-base border border-line rounded-md px-2 py-1 cursor-pointer hover:border-blue/50 focus:outline-none focus:border-blue/60"
                 :value="config.exportCSeparatorKey"
-                @change="config.setExportCSeparator($event.target.value)"
+                @change="changeExportSeparator($event.target.value)"
             >
               <option value="space">공백</option>
               <option value="newline">줄바꿈 (↵)</option>

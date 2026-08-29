@@ -86,8 +86,11 @@ async function handlePasswordSubmit({password}) {
   passwordLoading.value = true
   try {
     await config.unlockEncryption(password)
-    showPasswordModal.value = false
+    // 모달을 먼저 닫으면 이후 단계(백업·마이그레이션·버전 확인)가 실패했을 때
+    // passwordError를 렌더할 모달이 이미 사라져 아무것도 표시되지 않는다.
+    // 열기 절차를 모두 끝낸 뒤에 닫는다.
     await showReleaseNotesOrNavigate()
+    showPasswordModal.value = false
   } catch (e) {
     passwordError.value = String(e)
   } finally {

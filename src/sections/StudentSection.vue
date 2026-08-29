@@ -15,7 +15,8 @@ const bulkModalVisible = ref(false)
 const saving = ref(false)
 
 onMounted(() => {
-  studentStore.fetchStudents()
+  // 실패는 store의 error를 통해 화면에 표시된다. 여기서는 rejection만 흡수한다.
+  studentStore.fetchStudents().catch(() => {})
 })
 
 // (학년, 반) 기준으로 그룹핑
@@ -191,7 +192,7 @@ async function handleDeleted() {
       <StudentBulkImportModal
           v-if="bulkModalVisible"
           @close="bulkModalVisible = false"
-          @imported="studentStore.fetchStudents()"
+          @imported="studentStore.fetchStudents().catch(() => {})"
       />
     </transition>
 

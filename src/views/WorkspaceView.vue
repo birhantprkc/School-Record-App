@@ -51,7 +51,13 @@ onMounted(async () => {
   } catch {
     // 창 리사이즈 실패는 비치명적이므로 무시
   }
-  try { await config.loadAll() } catch { }
+  try {
+    await config.loadAll()
+  } catch (e) {
+    // 빈 catch로 삼키면 암호화 상태·환경설정이 실제와 어긋난 채 화면이 뜬다.
+    // configStore가 preferencesError로 들고 있고 각 섹션이 렌더한다.
+    console.error('환경설정 로드 실패:', e)
+  }
 })
 </script>
 

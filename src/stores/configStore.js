@@ -111,9 +111,18 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     async function setTheme(mode) {
+        // 저장이 실패하면 되돌린다. 예전에는 invoke 실패 시 theme만 바뀌고
+        // DOM 적용은 건너뛰어, 버튼 상태와 실제 테마가 어긋난 채 남았다.
+        const prev = theme.value
         theme.value = mode
-        await invoke('set_config', { key: THEME_MODE_KEY, value: mode })
         applyThemeToDom(mode)
+        try {
+            await invoke('set_config', { key: THEME_MODE_KEY, value: mode })
+        } catch (e) {
+            theme.value = prev
+            applyThemeToDom(prev)
+            throw e
+        }
     }
 
     async function refreshEncryptionStatus() {

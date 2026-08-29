@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx'
 import {useStudentStore} from '../stores/student.js'
 import {useFileStore} from '../stores/file.js'
 import {STUDENT_COL_ALIASES} from '../data/columnAliases'
+import {isValidIdentityPart} from '../services/studentId'
 import {save} from '@tauri-apps/plugin-dialog'
 import {SAMPLE_CSV} from '../data/sampleStudentCsv.ts'
 
@@ -50,9 +51,11 @@ const parsedRows = computed(() => {
     const isEmpty = (v) => v == null || String(v).trim() === ''
     if (isEmpty(row[gi]) && isEmpty(row[ci]) && isEmpty(row[ni]) && !name) return
     const errs = []
-    if (!grade || isNaN(grade) || grade < 1) errs.push('학년 오류')
-    if (!classNum || isNaN(classNum) || classNum < 1) errs.push('반 오류')
-    if (!number || isNaN(number) || number < 1) errs.push('번호 오류')
+    // 정수 판정까지 공용 규칙으로 통일한다. 예전에는 >= 1만 봐서 1.5 같은 값이
+    // 프론트를 통과한 뒤 백엔드 i64 역직렬화에서 영문 오류로 배치 전체가 실패했다.
+    if (!isValidIdentityPart(grade)) errs.push('학년 오류')
+    if (!isValidIdentityPart(classNum)) errs.push('반 오류')
+    if (!isValidIdentityPart(number)) errs.push('번호 오류')
     if (!name) errs.push('이름 없음')
     result.push({
       grade, classNum, number, name,
@@ -249,6 +252,10 @@ function processFile(file) {
     } catch (err) {
       parseError.value = '파일을 파싱하는 중 오류가 발생했습니다: ' + err.message
     }
+  }
+  // onerror가 없으면 읽기 실패가 아무 표시 없이 무시된다.
+  reader.onerror = () => {
+    parseError.value = '파일을 읽지 못했습니다. 파일이 열려 있거나 접근 권한이 없을 수 있습니다.'
   }
   reader.readAsArrayBuffer(file)
 }

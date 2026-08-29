@@ -142,6 +142,7 @@ async function submitCsv(groupId) {
 const selectedGroupIds = ref([])
 const searching = ref(false)
 const searchError = ref('')
+const loadError = ref('')
 const inspectResults = ref([])
 
 function toggleGroup(id) {
@@ -347,7 +348,10 @@ function resetWizard() {
 
 onMounted(() => {
   store.fetchGroups()
-  areaStore.fetchAreas()
+  // 영역을 못 불러오면 범위 선택이 비어 "영역이 없음"과 구분되지 않는다.
+  areaStore.fetchAreas().catch(e => {
+    loadError.value = `영역 목록을 불러오지 못했습니다: ${String(e)}`
+  })
 })
 </script>
 
@@ -621,6 +625,7 @@ onMounted(() => {
         </div>
 
         <!-- 검색 에러 -->
+        <div v-if="loadError" class="msg-error mb-3">{{ loadError }}</div>
         <div v-if="searchError" class="msg-error mb-3">{{ searchError }}</div>
 
         <!-- 검색 시작 버튼 -->

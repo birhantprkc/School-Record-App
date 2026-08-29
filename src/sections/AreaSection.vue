@@ -31,9 +31,10 @@ const areaStudentModalRef = ref(null)
 const saving = ref(false)
 
 onMounted(() => {
-  areaStore.fetchAreas()
-  activityStore.fetchActivities()
-  studentStore.fetchStudents()
+  // 실패는 store의 error를 통해 화면에 표시된다. 여기서는 rejection만 흡수한다.
+  areaStore.fetchAreas().catch(() => {})
+  activityStore.fetchActivities().catch(() => {})
+  studentStore.fetchStudents().catch(() => {})
 })
 
 function openAddModal() {
