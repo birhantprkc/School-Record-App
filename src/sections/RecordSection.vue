@@ -86,6 +86,8 @@ const showQuickReplace = ref(false)
 // 프로세스가 내려간다. 디바운스는 키 입력마다 리셋되므로 한 문장을 쉬지 않고 쓴 뒤
 // X를 누르면 그 문장이 통째로 사라졌다. 닫기를 가로채 먼저 저장한다.
 let unlistenClose = null
+// 종료를 막고 경고한 적이 있는가. 두 번째 시도는 통과시켜 갇히지 않게 한다.
+let closeWarned = false
 
 onMounted(async () => {
   // await보다 먼저 붙여, 첫 렌더 이후의 폭 변화를 놓치지 않게 한다.
@@ -96,13 +98,23 @@ onMounted(async () => {
 
   unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
     if (debounceTimers.size === 0 && failedCells.size === 0) return
+
+    // 한 번 막고 알린 뒤에도 다시 닫으려 하면 그대로 닫는다.
+    // 계속 막으면 디스크가 가득 찬 상황에서 앱을 아예 끌 수 없게 된다
+    // (작업 관리자로 강제 종료하면 어차피 내용도 잃는다).
+    if (closeWarned) return
+
     event.preventDefault()
     try {
       await flushPendingDebounces()
       await getCurrentWindow().destroy()
     } catch (e) {
-      // 저장에 실패했는데 닫아버리면 내용이 사라진다. 닫기를 멈추고 알린다.
-      saveError.value = `미저장 내용을 저장하지 못해 종료를 멈췄습니다: ${String(e)}`
+      // 저장에 실패했는데 닫아버리면 내용이 사라진다. 한 번은 멈추고 알린다.
+      closeWarned = true
+      saveError.value =
+          `미저장 내용을 저장하지 못했습니다: ${String(e)}
+` +
+          '내용을 다른 곳에 복사해 두세요. 다시 닫기를 누르면 저장하지 않고 종료합니다.'
     }
   })
 
@@ -392,6 +404,7 @@ async function saveCell(activityId, studentId, content) {
     next.set(key, 'saved')
     savingState.value = next
     failedCells.delete(key)
+    closeWarned = false
     saveError.value = ''
     setTimeout(() => {
       const clear = new Map(savingState.value)
