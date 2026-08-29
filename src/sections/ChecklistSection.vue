@@ -4,6 +4,7 @@ import {save} from '@tauri-apps/plugin-dialog'
 import {useAreaStore} from '../stores/area.js'
 import {useRecordStore} from '../stores/record.js'
 import {useFileStore} from '../stores/file.js'
+import {extractTopic} from '../services/recordText'
 import {revealItemInDir} from '@tauri-apps/plugin-opener'
 import {Workbook} from 'exceljs'
 import WizardLayout from '../components/WizardLayout.vue'
@@ -117,51 +118,6 @@ function resetWizard() {
 }
 
 // ── 활동주제 추출 ─────────────────────────────────────────────
-
-function extractTopic(content) {
-  if (!content?.trim()) return ''
-
-  // 1) 첫 문장 추출
-  // - s 플래그 제거: .이 줄바꿈을 넘지 않도록
-  // - m 플래그 추가: $가 각 줄 끝과 매칭
-  // - \s*$ : 온점 뒤 공백만 남은 경우도 첫 문장으로 인정
-  const sentenceMatch = content.match(
-      /^(.+?[.!?][“”‘’"']?)(?=\s+[A-Z가-힣]|\s*$)/m
-  )
-
-  const firstSentence = sentenceMatch
-      ? sentenceMatch[1].trim()
-      : content.split(/\r?\n/)[0].slice(0, 100).trim()
-
-  // 2) 따옴표 내용 전부 수집
-  // 열기: " (U+0022) ' (U+0027) " " ' ' 「 『
-  // 닫기: 위 + 」(U+300D) 』(U+300F) (「→」, 『→』 대응)
-  const matches = [
-    ...firstSentence.matchAll(
-        /["'“”‘’「『]([^"'“”‘’」』]{1,120})["'“”‘’」』]/g
-    )
-  ]
-
-  const values = matches
-      .map(m => m[1].trim())
-      .filter(Boolean)
-
-  // 3) 중첩 제거 (부분 포함 제거)
-  const filtered = values.filter((val, i, arr) =>
-      !arr.some((other, j) =>
-          i !== j && other.includes(val)
-      )
-  )
-
-  // 4) 결과 반환
-  if (filtered.length > 0) {
-    return filtered.slice(0, 5).join(', ')
-  }
-
-  // 5) fallback
-  const trimmed = firstSentence.slice(0, 100).trim()
-  return trimmed + (firstSentence.length > 100 ? '…' : '')
-}
 
 // ── 내보내기 헬퍼 ────────────────────────────────────────────
 

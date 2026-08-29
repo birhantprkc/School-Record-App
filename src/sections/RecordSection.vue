@@ -4,6 +4,7 @@ import {ALargeSmall, ArrowLeftRight, ArrowUpDown, Circle, CircleAlert, ChevronsR
 import {useAreaStore} from '../stores/area'
 import {useRecordStore} from '../stores/record'
 import {useConfigStore} from '../stores/configStore'
+import {byteLength} from '../services/recordText'
 import CellHistoryModal from '../components/CellHistoryModal.vue'
 import QuickReplaceModal from '../components/QuickReplaceModal.vue'
 
@@ -326,14 +327,6 @@ async function saveCell(activityId, studentId, content) {
   }
 }
 
-const _encoder = new TextEncoder()
-
-function byteLength(str) {
-  if (!str) return 0
-  const safeStr = String(str)
-  const normalizedStr = safeStr.replace(/\r/g, '').replace(/\n/g, '\r\n')
-  return _encoder.encode(normalizedStr).length
-}
 
 const byteLimit = computed(() => {
   if (!selectedAreaId.value || !areaStore.areas.length) return null
