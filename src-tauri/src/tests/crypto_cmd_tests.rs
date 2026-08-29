@@ -4,8 +4,8 @@ use base64::Engine;
 use rusqlite::Connection;
 use crate::commands::config::set_config_impl;
 use crate::commands::crypto::{
-    change_encryption_password_impl, disable_encryption_impl, enable_encryption_impl,
-    get_encryption_status_impl, resolve_data_key, unlock_encryption_impl,
+    change_encryption_password_impl, combine_all, disable_encryption_impl, enable_encryption_impl,
+    get_encryption_status_impl, purge_free_pages, resolve_data_key, unlock_encryption_impl,
 };
 use crate::commands::record::{
     bulk_import_records_impl, get_area_grid_impl, get_record_history_impl,
@@ -2098,31 +2098,75 @@ fn test_update_student_name_reencrypted_not_double_encrypted() {
     );
 }
 
-// ── combine: 마무리 작업 오류 합치기 ─────────────────────────
+// ── combine_all: 마무리 작업 오류 합치기 ─────────────────────
 
 #[test]
-fn test_combine_reports_both_failures() {
-    // 키 설정이 실패했다고 백업 삭제를 건너뛰면 평문이 남는다. 둘 다 시도하고
-    // 둘 다 실패하면 두 오류를 모두 알려야 한다.
-    let err = crate::commands::crypto::combine(Err("키 실패".into()), Err("삭제 실패".into()))
-        .unwrap_err();
+fn test_combine_all_reports_every_failure() {
+    // 하나가 실패했다고 다음을 건너뛰면 평문 백업이나 free page 잔재가 남는다.
+    // 모두 시도하고 실패한 것을 전부 알려야 한다.
+    let err = combine_all([
+        Err("키 실패".into()),
+        Err("삭제 실패".into()),
+        Err("정리 실패".into()),
+    ])
+    .unwrap_err();
     assert!(err.contains("키 실패"), "에러 메시지: {err}");
     assert!(err.contains("삭제 실패"), "에러 메시지: {err}");
+    assert!(err.contains("정리 실패"), "에러 메시지: {err}");
 }
 
 #[test]
-fn test_combine_reports_single_failure() {
+fn test_combine_all_reports_single_failure() {
     assert_eq!(
-        crate::commands::crypto::combine(Ok(()), Err("삭제 실패".into())).unwrap_err(),
+        combine_all([Ok(()), Err("삭제 실패".into()), Ok(())]).unwrap_err(),
         "삭제 실패"
     );
-    assert_eq!(
-        crate::commands::crypto::combine(Err("키 실패".into()), Ok(())).unwrap_err(),
-        "키 실패"
-    );
 }
 
 #[test]
-fn test_combine_ok_when_both_succeed() {
-    assert!(crate::commands::crypto::combine(Ok(()), Ok(())).is_ok());
+fn test_combine_all_ok_when_all_succeed() {
+    assert!(combine_all([Ok(()), Ok(()), Ok(())]).is_ok());
+}
+
+// ── purge_free_pages: 평문 잔재 제거 ─────────────────────────
+
+fn freelist_count(conn: &rusqlite::Connection) -> i64 {
+    conn.query_row("PRAGMA freelist_count", [], |r| r.get(0)).unwrap()
+}
+
+#[test]
+fn test_purge_free_pages_clears_freelist() {
+    let conn = setup_test_db();
+    // 많이 넣었다 지워 free page를 실제로 만든다.
+    for i in 0..500 {
+        insert_activity(&conn, &format!("활동{i}"));
+    }
+    conn.execute_batch("DELETE FROM Activity;").unwrap();
+    assert!(freelist_count(&conn) > 0, "free page가 생겨야 테스트가 의미 있다");
+
+    purge_free_pages(&conn, "테스트").unwrap();
+
+    assert_eq!(freelist_count(&conn), 0, "VACUUM 후 free page가 없어야 한다");
+}
+
+#[test]
+fn test_enable_encryption_leaves_no_free_pages() {
+    // 암호화는 행을 제자리에서 UPDATE하므로 옛 페이지에 평문이 남는다.
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+    let act_id = insert_activity(&conn, "발표");
+    for i in 1..=200 {
+        let stu_id = insert_student(&conn, 1, 1, i, &format!("학생{i}"));
+        upsert_record_impl(&conn, act_id, stu_id, "긴 활동 기록 내용을 여러 번 반복한다. ".repeat(20).as_str(), None).unwrap();
+    }
+
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+
+    assert_eq!(
+        freelist_count(&conn),
+        0,
+        "암호화 후 평문이 남은 free page가 없어야 한다"
+    );
+    std::fs::remove_dir_all(&tmp_dir).ok();
 }

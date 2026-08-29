@@ -189,16 +189,37 @@ fn backup_db_file(db_path_state: &DbPathState, suffix: &str) -> Result<PathBuf, 
     Ok(dest)
 }
 
-/// 마무리 작업 두 개를 모두 시도하고 오류를 합친다.
+/// 마무리 작업들을 모두 시도하고 오류를 합친다.
 ///
-/// 하나가 실패했다고 다른 하나를 건너뛰면, 키 설정 실패가 평문 백업을 남기게 된다.
-/// 그 상태가 바로 백업 삭제로 없애려던 상황이다.
-pub(crate) fn combine(a: Result<(), String>, b: Result<(), String>) -> Result<(), String> {
-    match (a, b) {
-        (Ok(()), Ok(())) => Ok(()),
-        (Err(e), Ok(())) | (Ok(()), Err(e)) => Err(e),
-        (Err(x), Err(y)) => Err(format!("{x}\n{y}")),
+/// 하나가 실패했다고 다음을 건너뛰면, 키 설정 실패가 평문 백업을 남기게 된다.
+/// 그 상태가 바로 이 마무리 작업들로 없애려던 상황이다.
+/// 배열 리터럴로 넘기므로 호출 시점에 모든 작업이 이미 실행된다.
+pub(crate) fn combine_all(
+    results: impl IntoIterator<Item = Result<(), String>>,
+) -> Result<(), String> {
+    let errors: Vec<String> = results.into_iter().filter_map(Result::err).collect();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
     }
+}
+
+/// 암호화 이전 평문이 남아 있는 free page를 실제로 덮어쓴다.
+///
+/// UPDATE는 행을 제자리에서 바꾸지 않고 옛 페이지를 freelist로 보낸다. 그 페이지에는
+/// 암호화 전 평문이 그대로 남아, 사용자가 안전하다고 믿는 .db 파일 안에서 읽힌다.
+/// 백업 파일은 지울 수 있지만 이건 파일 안에 있다.
+///
+/// VACUUM은 DB를 새로 써서 그 잔재를 없앤다. 트랜잭션 안에서는 실행할 수 없으므로
+/// 반드시 커밋 이후에 호출한다.
+pub(crate) fn purge_free_pages(conn: &Connection, what: &str) -> Result<(), String> {
+    conn.execute_batch("VACUUM").map_err(|e| {
+        format!(
+            "{what}는 완료했지만 이전 데이터 정리(VACUUM)에 실패했습니다. \
+             디스크 여유 공간을 확인해주세요. ({e})"
+        )
+    })
 }
 
 /// 작업이 성공한 뒤 백업을 지운다.
@@ -245,10 +266,11 @@ pub(crate) fn enable_encryption_impl(
     })
     .map_err(|e| format!("{e}\n복구용 평문 백업이 남아 있습니다: {}", backup.display()))?;
 
-    combine(
+    combine_all([
         set_crypto_state(crypto, key),
         remove_backup_after_success(&backup, "암호화"),
-    )
+        purge_free_pages(conn, "암호화"),
+    ])
 }
 
 pub(crate) fn disable_encryption_impl(
@@ -311,10 +333,13 @@ pub(crate) fn change_encryption_password_impl(
     })
     .map_err(|e| format!("{e}\n복구용 백업이 남아 있습니다: {}", backup.display()))?;
 
-    combine(
+    // 옛 키로 암호화된 페이지가 freelist에 남는다. 비밀번호를 바꾼 이유가 유출이라면
+    // 그 잔재도 지워야 변경이 의미를 갖는다.
+    combine_all([
         set_crypto_state(crypto, new_key),
         remove_backup_after_success(&backup, "비밀번호 변경"),
-    )
+        purge_free_pages(conn, "비밀번호 변경"),
+    ])
 }
 
 fn db_conn<'a>(guard: &'a Option<Connection>) -> Result<&'a Connection, String> {
