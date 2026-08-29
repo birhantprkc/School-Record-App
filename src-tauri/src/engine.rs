@@ -1,7 +1,7 @@
 use regex::Regex;
 use rusqlite::Connection;
 use std::collections::HashMap;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use crate::crypto::maybe_decrypt;
 use crate::state::{ReplaceCache, MAX_CACHE_ENTRIES};
@@ -25,6 +25,34 @@ pub fn validate_existing_path(path: &str, not_found_message: &str) -> Result<(),
     p.canonicalize()
         .map_err(|_| not_found_message.to_string())?;
     Ok(())
+}
+
+/// 아직 존재하지 않는 백업 파일 경로를 만든다.
+///
+/// 예전에는 파일명이 분 단위(`%y%m%d-%H%M`)였고 `fs::copy`가 기존 파일을 덮어썼다.
+/// 잘못된 가져오기나 복원을 한 뒤 1분 안에 다시 열면, 사고 직전의 백업이 사고 이후
+/// 상태로 조용히 교체됐다 — 앱의 유일한 안전망이 사라지는 것이다.
+///
+/// 초 단위로 낮추고, 그래도 겹치면 일련번호를 붙여 **절대 덮어쓰지 않는다.**
+pub fn unique_backup_path(src: &Path, suffix: &str) -> Result<PathBuf, String> {
+    let parent = src
+        .parent()
+        .ok_or("DB 파일의 상위 디렉토리를 찾을 수 없습니다.")?;
+    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("backup");
+    let ts = chrono::Local::now().format("%y%m%d-%H%M%S").to_string();
+
+    let first = parent.join(format!("{stem}.{ts}{suffix}.db.backup"));
+    if !first.exists() {
+        return Ok(first);
+    }
+    // 같은 초에 두 번 이상 여는 경우. 무한정 시도하지 않고 상한을 둔다.
+    for n in 2..=99 {
+        let candidate = parent.join(format!("{stem}.{ts}-{n}{suffix}.db.backup"));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("백업 파일 이름을 만들지 못했습니다. 같은 이름의 백업이 너무 많습니다.".to_string())
 }
 
 pub fn validate_parent_dir_path(path: &str, missing_parent_message: &str) -> Result<(), String> {

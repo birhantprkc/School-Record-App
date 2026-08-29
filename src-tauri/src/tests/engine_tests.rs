@@ -359,3 +359,66 @@ fn test_validate_rules_ignores_disabled_and_literal_rules() {
     ];
     assert!(validate_rules(&rules).is_ok());
 }
+
+// ── unique_backup_path (감사 F2) ──────────────────────────────
+//
+// 예전에는 파일명이 분 단위였고 fs::copy가 덮어썼다. 잘못된 가져오기나 복원 뒤
+// 1분 안에 다시 열면 사고 직전 백업이 사고 이후 상태로 교체됐다.
+
+use crate::engine::unique_backup_path;
+
+fn temp_dir_with(name: &str) -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("ubp_{}_{}_{}", name, std::process::id(), nanos));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn test_unique_backup_path_never_returns_existing_file() {
+    let dir = temp_dir_with("exists");
+    let src = dir.join("학생부.db");
+    std::fs::write(&src, b"db").unwrap();
+
+    let first = unique_backup_path(&src, "").unwrap();
+    std::fs::write(&first, b"backup1").unwrap();
+
+    // 같은 초에 다시 요청해도 기존 백업을 가리켜서는 안 된다.
+    let second = unique_backup_path(&src, "").unwrap();
+    assert_ne!(first, second, "기존 백업을 덮어쓸 경로를 돌려주면 안 된다");
+    assert!(!second.exists(), "돌려준 경로는 아직 없는 파일이어야 한다");
+
+    // 첫 백업 내용이 그대로 남아 있어야 한다.
+    assert_eq!(std::fs::read(&first).unwrap(), b"backup1");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_unique_backup_path_uses_second_granularity() {
+    let dir = temp_dir_with("secs");
+    let src = dir.join("학생부.db");
+    std::fs::write(&src, b"db").unwrap();
+
+    let p = unique_backup_path(&src, "").unwrap();
+    let name = p.file_name().unwrap().to_string_lossy().to_string();
+    // 학생부.YYMMDD-HHMMSS.db.backup — 타임스탬프가 12자리(초 포함)여야 한다.
+    let ts = name.split('.').nth(1).unwrap();
+    assert_eq!(ts.len(), 13, "YYMMDD-HHMMSS 형식이어야 한다: {name}");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_unique_backup_path_keeps_suffix() {
+    let dir = temp_dir_with("suffix");
+    let src = dir.join("학생부.db");
+    std::fs::write(&src, b"db").unwrap();
+
+    let p = unique_backup_path(&src, "-pre-encrypt").unwrap();
+    let name = p.file_name().unwrap().to_string_lossy().to_string();
+    assert!(name.contains("-pre-encrypt"), "접미사가 유지되어야 한다: {name}");
+    assert!(name.ends_with(".db.backup"));
+    std::fs::remove_dir_all(&dir).ok();
+}

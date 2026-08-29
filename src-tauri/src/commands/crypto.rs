@@ -180,11 +180,7 @@ pub(crate) fn unlock_encryption_impl(
 fn backup_db_file(db_path_state: &DbPathState, suffix: &str) -> Result<PathBuf, String> {
     let guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = guard.as_ref().ok_or("열린 프로젝트가 없습니다.")?;
-    let parent = src.parent().ok_or("DB 파일의 상위 디렉토리를 찾을 수 없습니다.")?;
-    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("backup");
-    let ts = chrono::Local::now().format("%y%m%d-%H%M").to_string();
-    let bak_name = format!("{stem}.{ts}{suffix}.db.backup");
-    let dest = parent.join(bak_name);
+    let dest = crate::engine::unique_backup_path(src, suffix)?;
     std::fs::copy(src, &dest).map_err(|e| e.to_string())?;
     Ok(dest)
 }
