@@ -27,6 +27,20 @@ pub fn validate_replace_rule(old_text: &str, new_text: &str, is_regex: bool) -> 
     Ok(())
 }
 
+/// 규칙을 저장하기 전 검사.
+///
+/// 꺼진 규칙은 apply_rules가 건너뛰므로 정규식이 컴파일되지 않아도 무방하다.
+/// 여기서 막으면 구버전에서 저장된 잘못된 정규식 규칙을 **끄는 것조차** 불가능해지고,
+/// 사용자에게 남는 선택지가 삭제뿐이 된다.
+pub fn validate_replace_rule_for_save(
+    old_text: &str,
+    new_text: &str,
+    is_regex: bool,
+    enabled: bool,
+) -> Result<(), String> {
+    validate_replace_rule(old_text, new_text, is_regex && enabled)
+}
+
 pub fn get_replace_rules_impl(conn: &Connection) -> Result<Vec<ReplaceRule>, String> {
     let mut rules = fetch_rules_from_db(conn)?;
     let conflicts = detect_conflicts(&rules);
@@ -201,7 +215,7 @@ pub fn update_replace_rule(
     state: State<DbState>,
     cache: State<ReplaceCacheState>,
 ) -> Result<ReplaceRule, String> {
-    validate_replace_rule(&old_text, &new_text, is_regex)?;
+    validate_replace_rule_for_save(&old_text, &new_text, is_regex, enabled)?;
 
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard

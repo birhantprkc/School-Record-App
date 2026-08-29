@@ -4,7 +4,7 @@ import {save} from '@tauri-apps/plugin-dialog'
 import {useActivityStore} from '../stores/activity.js'
 import {useRecordStore} from '../stores/record.js'
 import {useFileStore} from '../stores/file.js'
-import {Download, FileSpreadsheet} from 'lucide-vue-next'
+import {AlertTriangle, Download, FileSpreadsheet} from 'lucide-vue-next'
 import WizardLayout from '../components/WizardLayout.vue'
 import DiffView from '../components/DiffView.vue'
 import {Workbook} from 'exceljs'
@@ -72,6 +72,8 @@ const previewItems = ref([])
 const checkedKeys = ref(new Set())
 const diffViewMode = ref('raw')
 const pendingRecords = ref([])
+// 학번을 해석하지 못해 임포트에서 빠진 행 수. 0이 아니면 사용자에게 알린다.
+const skippedRowCount = ref(0)
 
 // ── Computed ──────────────────────────────────────────────────
 
@@ -157,13 +159,22 @@ const allChangedChecked = computed(() =>
     changedPreviewItems.value.every(item => checkedKeys.value.has(item.key))
 )
 
+// 학년·반·번호로 쓸 수 있는 값인지 판정한다. 미리보기 표시와 실제 임포트가
+// 같은 기준을 써야, 미리보기에서 멀쩡해 보이던 행이 조용히 빠지지 않는다.
+function isValidIdentityPart(v) {
+  return Number.isInteger(v) && v >= 1
+}
+
 const studentIdPreviewRows = computed(() => {
   const col = colMap.value.studentId
   if (col === null) return []
   return rawData.value.slice(0, 5).map(row => {
     const raw = row[col]
-    const parsed = parseStudentId(raw)
-    return parsed ? {raw, ...parsed, error: false} : {raw, grade: '?', classNum: '?', number: '?', error: true}
+    const p = parseStudentId(raw)
+    if (!p) return {raw, grade: '?', classNum: '?', number: '?', error: true}
+    // 파싱은 됐지만 0이 섞인 경우('0101' → 학년 0)도 임포트에서 빠지므로 오류로 표시한다.
+    const ok = [p.grade, p.classNum, p.number].every(isValidIdentityPart)
+    return {raw, ...p, error: !ok}
   })
 })
 
@@ -185,7 +196,7 @@ function resolveIdentity(row) {
   }
   // 두 경로 모두 1 이상의 정수만 허용한다. 학번 '0101'처럼 0이 나오는 경우,
   // 음수(백엔드 CHECK 제약), 소수(i64 역직렬화 실패)가 모두 여기서 걸린다.
-  if (!Object.values(identity).every(v => Number.isInteger(v) && v >= 1)) return null
+  if (!Object.values(identity).every(isValidIdentityPart)) return null
   return identity
 }
 
@@ -448,6 +459,7 @@ async function loadPreview() {
   previewItems.value = []
   checkedKeys.value = new Set()
   pendingRecords.value = []
+  skippedRowCount.value = 0
 
   try {
     const m = colMap.value
@@ -474,7 +486,10 @@ async function loadPreview() {
     if (fileType.value === 'A') {
       for (const row of rawData.value) {
         const identity = resolveIdentity(row)
-        if (!identity) continue
+        if (!identity) {
+          skippedRowCount.value++
+          continue
+        }
         const actName = String(row[m.activityName] ?? '').trim()
         const content = String(row[m.activityContent] ?? '').trim()
         if (!actName || !content) continue
@@ -487,7 +502,10 @@ async function loadPreview() {
     } else {
       for (const row of rawData.value) {
         const identity = resolveIdentity(row)
-        if (!identity) continue
+        if (!identity) {
+          skippedRowCount.value++
+          continue
+        }
         for (const {name: actName, index} of activityColIndices.value) {
           const content = String(row[index] ?? '').trim()
           if (!content) continue
@@ -1044,6 +1062,13 @@ function resetWizard() {
             <!-- badge: 변경 통계 뱃지 --><span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-amber bg-amber/[0.10] border-amber/30">변경 {{ changedPreviewItems.length }}건</span>
             <!-- badge: 신규 통계 뱃지 --><span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-green bg-green/[0.10] border-green/30">신규 {{ newPreviewItemsCount }}건</span>
             <!-- badge: 동일 통계 뱃지 --><span class="text-sm font-semibold py-1 px-2.5 rounded-[6px] border text-ink-5 bg-line/20 border-line">동일 {{ unchangedCount }}건</span>
+          </div>
+
+          <!-- 학번을 해석하지 못해 빠진 행 안내 (조용히 사라지면 안 된다) -->
+          <div v-if="skippedRowCount > 0"
+               class="flex items-center gap-2.5 px-3.5 py-3 rounded-btn bg-amber/[8%] border border-amber/25 text-base text-amber leading-[1.5] mb-3">
+            <AlertTriangle :size="16" class="shrink-0"/>
+            <span>학년·반·번호를 읽을 수 없어 <strong>{{ skippedRowCount }}행</strong>이 제외되었습니다. 학번 형식과 열 지정을 확인해주세요.</span>
           </div>
 
           <!-- 변경 항목 없음 -->

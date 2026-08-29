@@ -1,7 +1,7 @@
 use crate::commands::replace::{
     apply_default_replace_rules_impl, apply_replace_impl, create_replace_rule_db,
     delete_replace_rule_impl, get_replace_rules_impl, preview_replace_impl, update_replace_rule_db,
-    validate_replace_rule,
+    validate_replace_rule, validate_replace_rule_for_save,
 };
 use crate::engine::{apply_rules, fetch_rules_from_db, get_records_for_scope};
 use crate::state::ReplaceCache;
@@ -389,4 +389,26 @@ fn test_apply_default_rules_missing_field_leaves_no_open_transaction() {
 
     // 앞선 규칙도 롤백되어야 한다.
     assert!(fetch_rules_from_db(&conn).unwrap().is_empty());
+}
+
+// ── 꺼진 규칙은 정규식 검증을 걸지 않는다 ─────────────────────
+
+#[test]
+fn test_disabled_invalid_regex_rule_can_be_saved() {
+    // 구버전에서 저장된 잘못된 정규식 규칙을 끄려면 저장이 되어야 한다.
+    // 막으면 사용자에게 남는 선택지가 삭제뿐이 된다.
+    assert!(validate_replace_rule_for_save("[invalid(", "x", true, false).is_ok());
+}
+
+#[test]
+fn test_enabled_invalid_regex_rule_still_rejected() {
+    let err = expect_err(validate_replace_rule_for_save("[invalid(", "x", true, true));
+    assert!(err.contains("정규식"), "에러 메시지: {err}");
+}
+
+#[test]
+fn test_disabled_rule_still_checked_for_empty_and_identical_text() {
+    // 정규식 검사만 건너뛴다. 나머지 기본 검증은 꺼진 규칙에도 그대로 적용된다.
+    assert!(validate_replace_rule_for_save("", "x", false, false).is_err());
+    assert!(validate_replace_rule_for_save("같음", "같음", false, false).is_err());
 }

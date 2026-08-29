@@ -189,6 +189,18 @@ fn backup_db_file(db_path_state: &DbPathState, suffix: &str) -> Result<PathBuf, 
     Ok(dest)
 }
 
+/// 마무리 작업 두 개를 모두 시도하고 오류를 합친다.
+///
+/// 하나가 실패했다고 다른 하나를 건너뛰면, 키 설정 실패가 평문 백업을 남기게 된다.
+/// 그 상태가 바로 백업 삭제로 없애려던 상황이다.
+pub(crate) fn combine(a: Result<(), String>, b: Result<(), String>) -> Result<(), String> {
+    match (a, b) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(e), Ok(())) | (Ok(()), Err(e)) => Err(e),
+        (Err(x), Err(y)) => Err(format!("{x}\n{y}")),
+    }
+}
+
 /// 작업이 성공한 뒤 백업을 지운다.
 ///
 /// 삭제 실패를 조용히 넘기면 사용자는 백업이 사라진 줄 알지만 실제로는 남아 있게
@@ -233,8 +245,10 @@ pub(crate) fn enable_encryption_impl(
     })
     .map_err(|e| format!("{e}\n복구용 평문 백업이 남아 있습니다: {}", backup.display()))?;
 
-    set_crypto_state(crypto, key)?;
-    remove_backup_after_success(&backup, "암호화")
+    combine(
+        set_crypto_state(crypto, key),
+        remove_backup_after_success(&backup, "암호화"),
+    )
 }
 
 pub(crate) fn disable_encryption_impl(
@@ -297,8 +311,10 @@ pub(crate) fn change_encryption_password_impl(
     })
     .map_err(|e| format!("{e}\n복구용 백업이 남아 있습니다: {}", backup.display()))?;
 
-    set_crypto_state(crypto, new_key)?;
-    remove_backup_after_success(&backup, "비밀번호 변경")
+    combine(
+        set_crypto_state(crypto, new_key),
+        remove_backup_after_success(&backup, "비밀번호 변경"),
+    )
 }
 
 fn db_conn<'a>(guard: &'a Option<Connection>) -> Result<&'a Connection, String> {

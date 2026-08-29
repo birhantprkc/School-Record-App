@@ -2097,3 +2097,32 @@ fn test_update_student_name_reencrypted_not_double_encrypted() {
         "이중 암호화가 아니어야 한다"
     );
 }
+
+// ── combine: 마무리 작업 오류 합치기 ─────────────────────────
+
+#[test]
+fn test_combine_reports_both_failures() {
+    // 키 설정이 실패했다고 백업 삭제를 건너뛰면 평문이 남는다. 둘 다 시도하고
+    // 둘 다 실패하면 두 오류를 모두 알려야 한다.
+    let err = crate::commands::crypto::combine(Err("키 실패".into()), Err("삭제 실패".into()))
+        .unwrap_err();
+    assert!(err.contains("키 실패"), "에러 메시지: {err}");
+    assert!(err.contains("삭제 실패"), "에러 메시지: {err}");
+}
+
+#[test]
+fn test_combine_reports_single_failure() {
+    assert_eq!(
+        crate::commands::crypto::combine(Ok(()), Err("삭제 실패".into())).unwrap_err(),
+        "삭제 실패"
+    );
+    assert_eq!(
+        crate::commands::crypto::combine(Err("키 실패".into()), Ok(())).unwrap_err(),
+        "키 실패"
+    );
+}
+
+#[test]
+fn test_combine_ok_when_both_succeed() {
+    assert!(crate::commands::crypto::combine(Ok(()), Ok(())).is_ok());
+}

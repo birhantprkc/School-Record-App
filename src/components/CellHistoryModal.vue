@@ -91,7 +91,8 @@ async function saveManualSnapshot() {
     await recordStore.saveHistorySnapshot({
       activityId: props.activityId,
       studentId: props.studentId,
-      // 메모는 선택 사항이다. 빈 값은 null로 보내 note 컬럼을 비운다.
+      // 메모는 선택 사항이다. 빈 값은 null로 보낸다.
+      // 새 이력은 메모 없이 기록되고, 이미 있는 이력의 메모는 COALESCE로 유지된다.
       note: note || null,
     })
     noteInput.value = ''
