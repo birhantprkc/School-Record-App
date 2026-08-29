@@ -67,7 +67,13 @@ fn schema_dump(conn: &Connection) -> String {
 fn fingerprint(conn: &Connection) -> String {
     let mut hasher = Sha256::new();
     hasher.update(schema_dump(conn).as_bytes());
-    format!("{:x}", hasher.finalize())
+    // sha2 0.11의 finalize()는 LowerHex를 구현하지 않는 Array를 반환하므로 직접 hex 변환한다.
+    // 바이트당 소문자 2자리 = 이전 `{:x}` 출력과 동일한 문자열이어야 한다.
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// 현재 schema.sql로 만든 DB (= 신규 프로젝트 생성 결과)
