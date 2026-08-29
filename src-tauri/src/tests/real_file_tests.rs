@@ -5,7 +5,9 @@
 //! 한 번도 실행되지 않는다. 이 하니스가 그 공백을 메운다.
 //!
 //! 원본은 절대 건드리지 않는다. 항상 사본을 만들어 그 위에서만 작업한다.
-//! 개인정보가 들어 있으므로 내용은 출력하지 않고 개수·검사 결과만 출력한다.
+//! 개인정보가 들어 있으므로 레코드 내용은 출력하지 않고 개수·검사 결과만 출력한다.
+//! (어느 파일이 실패했는지 알아야 하므로 파일명은 출력한다. 파일명 자체에 학교·학급이
+//! 드러날 수 있으니 로그를 그대로 남에게 넘기지 말 것.)
 
 use crate::commands::activity::get_activities_impl;
 use crate::commands::area::{create_area_impl, delete_area_impl, get_areas_impl};
@@ -18,14 +20,25 @@ use crate::state::{
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
-const LOCKED_V1: &str = "fc7c11a3d03c8d4a104f2ec9788745928bcb11cef517bab90b0be463dedb6be2";
 const PROBE: &str = "__pr29_write_probe__";
 
+/// 현재 `SCHEMA_VERSION`에 해당하는 고정 지문. 값을 복제하지 않고 원본을 참조한다.
+/// (복제해 두면 스키마가 v2로 올라갈 때 조용히 낡는다.)
+fn expected_fingerprint() -> &'static str {
+    super::schema_lock_tests::SCHEMA_FINGERPRINTS[(crate::db::SCHEMA_VERSION - 1) as usize]
+}
+
 /// 파일 헤더 오프셋 96: 이 파일을 마지막으로 쓴 SQLite 라이브러리 버전
-fn sqlite_write_version(path: &std::path::Path) -> String {
-    let bytes = std::fs::read(path).unwrap();
-    let n = u32::from_be_bytes([bytes[96], bytes[97], bytes[98], bytes[99]]);
-    format!("{}.{}.{}", n / 1_000_000, (n / 1_000) % 1_000, n % 1_000)
+fn sqlite_write_version(path: &std::path::Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("파일 읽기 실패: {e}"))?;
+    // SQLite 헤더는 100바이트다. 더 짧으면 DB 파일이 아니다 —
+    // 무검사 인덱싱하면 엉뚱한 파일 하나가 전체 검증을 panic으로 중단시킨다.
+    let head: [u8; 4] = bytes
+        .get(96..100)
+        .and_then(|s| s.try_into().ok())
+        .ok_or_else(|| format!("SQLite 헤더가 아닙니다: {} bytes", bytes.len()))?;
+    let n = u32::from_be_bytes(head);
+    Ok(format!("{}.{}.{}", n / 1_000_000, (n / 1_000) % 1_000, n % 1_000))
 }
 
 fn schema_fingerprint(conn: &Connection) -> String {
@@ -48,9 +61,11 @@ fn schema_fingerprint(conn: &Connection) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn count(conn: &Connection, table: &str) -> i64 {
+/// 에러를 삼키지 않는다. 예전에는 `unwrap_or(-1)`이라 읽을 수 없는 테이블이
+/// 로그에 -1로 찍히고도 전체는 통과했다 — CLAUDE.md가 금지하는 silent failure다.
+fn count(conn: &Connection, table: &str) -> Result<i64, String> {
     conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
-        .unwrap_or(-1)
+        .map_err(|e| format!("{table} 조회 실패: {e}"))
 }
 
 fn fresh_states() -> (DbState, DbPathState, CryptoStateHandle, ReplaceCacheState) {
@@ -92,7 +107,14 @@ fn verify_real_user_files() {
         std::fs::copy(src, &dst).unwrap();
 
         println!("\n=== [{}] {name} ===", i + 1);
-        println!("  이 파일을 쓴 SQLite: {}", sqlite_write_version(&dst));
+        match sqlite_write_version(&dst) {
+            Ok(v) => println!("  이 파일을 쓴 SQLite: {v}"),
+            Err(e) => {
+                println!("  [FAIL] {e}");
+                fail(&name, e);
+                continue;
+            }
+        }
         println!("  지금 여는 엔진:      {}", rusqlite::version());
 
         let (db, path_state, crypto, cache) = fresh_states();
@@ -130,35 +152,64 @@ fn verify_real_user_files() {
             fail(&name, format!("fk 위반 {fk_bad}건"));
         }
 
-        // 3) 버전 / 스키마 구조
-        let uv: u32 = conn
+        // 3) 열었을 때의 상태 (아직 판정하지 않는다 — 마이그레이션 전이므로
+        //    구버전 파일이라면 다를 수 있다. 판정은 5)에서 마이그레이션 후에 한다.)
+        let uv_before: u32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        let fp = schema_fingerprint(conn);
         println!(
-            "  user_version: {uv} (앱 SCHEMA_VERSION: {})",
+            "  열었을 때 user_version: {uv_before} (앱 SCHEMA_VERSION: {})",
             crate::db::SCHEMA_VERSION
         );
-        println!("  스키마 지문 == 고정 v1: {}", fp == LOCKED_V1);
-        if fp != LOCKED_V1 {
-            println!("    실제 지문: {fp}");
+        match is_encryption_enabled(conn) {
+            Ok(v) => println!("  암호화 사용: {v}"),
+            Err(e) => {
+                println!("  [FAIL] 암호화 설정 조회: {e}");
+                fail(&name, format!("is_encryption_enabled: {e}"));
+            }
         }
-        println!("  암호화 사용: {}", is_encryption_enabled(conn).unwrap());
 
         // 4) 데이터 규모
         print!("  행 수:");
         for t in ["Student", "Area", "Activity", "ActivityRecord"] {
-            print!(" {t}={}", count(conn, t));
+            match count(conn, t) {
+                Ok(n) => print!(" {t}={n}"),
+                Err(e) => {
+                    print!(" {t}=ERR");
+                    fail(&name, e);
+                }
+            }
         }
         println!();
 
-        // 5) 마이그레이션 경로
+        // 5) 마이그레이션 → 그 결과를 **판정**한다.
+        //
+        //    이 하니스의 존재 이유가 여기다: 번들 SQLite가 올라가면서 sqlite_master
+        //    텍스트 표기가 달라지면 실제 파일의 지문이 고정 지문과 어긋난다.
+        //    이걸 출력만 하고 통과시키면 하니스가 있으나 마나다.
         match migrate_schema_impl(conn) {
             Ok(()) => {
-                let uv2: u32 = conn
+                let uv_after: u32 = conn
                     .query_row("PRAGMA user_version", [], |r| r.get(0))
                     .unwrap();
-                println!("  [OK]   migrate_schema → user_version {uv2}");
+                println!("  [OK]   migrate_schema → user_version {uv_after}");
+
+                if uv_after != crate::db::SCHEMA_VERSION {
+                    println!(
+                        "  [FAIL] 마이그레이션 후 user_version이 {uv_after} (기대: {})",
+                        crate::db::SCHEMA_VERSION
+                    );
+                    fail(&name, format!("user_version {uv_after}"));
+                }
+
+                let fp = schema_fingerprint(conn);
+                let expected = expected_fingerprint();
+                println!("  스키마 지문 == 고정 지문: {}", fp == expected);
+                if fp != expected {
+                    println!("    기대: {expected}");
+                    println!("    실제: {fp}");
+                    fail(&name, "스키마 지문 불일치".into());
+                }
             }
             Err(e) => {
                 println!("  [FAIL] migrate_schema: {e}");
@@ -221,7 +272,7 @@ fn verify_real_user_files() {
         match open_project_impl(dst.to_str().unwrap(), &db2, &p2, &c2, &ca2) {
             Ok(()) => println!(
                 "  [OK]   쓰기 후 재열기 (이제 {} 기록)",
-                sqlite_write_version(&dst)
+                sqlite_write_version(&dst).unwrap_or_else(|e| e)
             ),
             Err(e) => {
                 println!("  [FAIL] 재열기: {e}");

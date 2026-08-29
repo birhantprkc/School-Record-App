@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256};
 ///
 /// ⚠️ 기존 항목은 절대 수정 금지. 이미 배포된 DB 파일의 구조를 기록한 값이다.
 /// 스키마가 바뀌었다면 기존 값을 고치는 것이 아니라 새 항목을 추가해야 한다.
-const SCHEMA_FINGERPRINTS: &[&str] = &[
+pub(crate) const SCHEMA_FINGERPRINTS: &[&str] = &[
     // v1 — 정식 출시 스키마
     "fc7c11a3d03c8d4a104f2ec9788745928bcb11cef517bab90b0be463dedb6be2",
 ];
