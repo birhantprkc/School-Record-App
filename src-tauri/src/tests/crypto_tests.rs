@@ -448,3 +448,65 @@ fn test_maybe_decrypt_plaintext_with_key_returns_error() {
     let result2 = maybe_decrypt("평문:데이터".to_string(), Some(key));
     assert!(result2.is_err());
 }
+
+// ── 미검증 분기: UTF-8 변환 실패 ──────────────────────────────────
+//
+// decrypt()는 복호화에 성공한 바이트열을 String으로 바꾸는데, 그 바이트가
+// 유효한 UTF-8이 아니면 "UTF-8 변환 실패"로 떨어진다. 앱은 항상 &str만
+// 암호화하므로 정상 경로에서는 도달하지 않지만, 명시적으로 만들어 둔
+// 에러 분기이므로 실제로 그 메시지가 나오는지 확인해 둔다.
+// (인증 태그는 통과하고 UTF-8 변환에서만 실패하는 상황을 만들어야 한다.)
+
+#[test]
+fn test_decrypt_valid_ciphertext_of_invalid_utf8_returns_utf8_error() {
+    use aes_gcm::aead::{Aead, Generate, KeyInit, Nonce};
+    use aes_gcm::{Aes256Gcm, Key};
+
+    let key = derive_key("utf8_branch_pw", &[7u8; 16]);
+    let cipher = Aes256Gcm::new(<&Key<Aes256Gcm>>::try_from(&key[..]).unwrap());
+    let nonce = Nonce::<Aes256Gcm>::try_generate().unwrap();
+
+    // 0x80은 UTF-8 연속 바이트로 단독으로는 유효하지 않다.
+    let invalid_utf8: &[u8] = &[0x80, 0xFF, 0xFE];
+    let ct = cipher.encrypt(&nonce, invalid_utf8).unwrap();
+    let value = format!("{}:{}", B64.encode(nonce.as_slice()), B64.encode(&ct));
+
+    let err = decrypt(&value, &key).unwrap_err();
+    assert!(
+        err.contains("UTF-8 변환 실패"),
+        "인증은 통과하고 UTF-8 변환에서 실패해야 한다. 실제: {err}"
+    );
+}
+
+// ── derive_key: salt 길이 경계 ────────────────────────────────────
+//
+// derive_key는 salt 길이를 검사하지 않는다(PBKDF2가 임의 길이를 받는다).
+// 손상된 설정에서 빈 salt나 짧은 salt가 들어와도 패닉하지 않고 32바이트
+// 키를 내놓는다는 것, 그리고 정상 salt와는 다른 키가 된다는 것을 고정한다.
+
+#[test]
+fn test_derive_key_empty_salt_still_returns_distinct_32_bytes() {
+    let empty = derive_key("pw", &[]);
+    let normal = derive_key("pw", &[42u8; 16]);
+    assert_eq!(empty.len(), 32);
+    assert_ne!(empty, [0u8; 32], "키가 전부 0이면 안 된다");
+    assert_ne!(
+        empty, normal,
+        "빈 salt와 정상 salt가 같은 키를 내면 salt가 무의미해진다"
+    );
+}
+
+#[test]
+fn test_derive_key_short_salt_differs_by_length() {
+    let one = derive_key("pw", &[1u8]);
+    let two = derive_key("pw", &[1u8, 1u8]);
+    assert_eq!(one.len(), 32);
+    assert_ne!(one, two, "salt 길이가 다르면 키도 달라야 한다");
+}
+
+#[test]
+fn test_derive_key_long_salt_is_32_bytes() {
+    let key = derive_key("pw", &[9u8; 4096]);
+    assert_eq!(key.len(), 32);
+    assert_ne!(key, [0u8; 32]);
+}

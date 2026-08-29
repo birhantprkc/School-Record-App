@@ -2189,3 +2189,95 @@ fn test_enable_encryption_purges_free_pages() {
     );
     std::fs::remove_dir_all(&tmp_dir).ok();
 }
+
+// ── 손상된 암호화 설정: salt 쪽 ───────────────────────────────────
+//
+// 기존 테스트는 salt가 **없는** 경우만 다룬다. 값이 있지만 망가진 경우는
+// 에러 메시지가 달라야 사용자가 원인을 알 수 있다.
+
+#[test]
+fn test_unlock_with_malformed_base64_salt_returns_decode_error() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    set_config_impl(&conn, "encryption_enabled", "true").unwrap();
+    // base64가 아닌 문자열이 salt 자리에 들어간 경우
+    set_config_impl(&conn, "encryption_pbkdf2_salt", "!!!not-base64!!!").unwrap();
+
+    let err = unlock_encryption_impl(&conn, &crypto, "any_password").unwrap_err();
+    assert!(
+        err.contains("salt 디코딩 실패"),
+        "salt가 깨졌다는 것이 드러나야 한다. 실제: {err}"
+    );
+}
+
+#[test]
+fn test_unlock_with_wrong_length_salt_fails_as_wrong_password() {
+    let conn = setup_test_db();
+    let db_path = setup_temp_db_path_state();
+    let crypto = crypto_state(None);
+
+    // 정상적으로 암호화를 켠 뒤
+    enable_encryption_impl(&conn, &crypto, &db_path.0, "correct_password").unwrap();
+    clear_crypto_state(&crypto).unwrap();
+
+    // salt만 길이가 다른 값으로 바꿔치기한다 (base64로는 멀쩡히 디코딩된다)
+    set_config_impl(&conn, "encryption_pbkdf2_salt", &B64.encode([1u8; 4])).unwrap();
+
+    // 파생 키가 달라지므로 올바른 비밀번호로도 열리지 않는다.
+    // derive_key는 salt 길이를 검사하지 않으므로 패닉 없이 검증 실패로 떨어진다.
+    let err = unlock_encryption_impl(&conn, &crypto, "correct_password").unwrap_err();
+    assert!(
+        !err.is_empty(),
+        "salt가 바뀌면 올바른 비밀번호여도 실패해야 한다"
+    );
+    assert!(
+        crate::state::current_crypto_key(&crypto).unwrap().is_none(),
+        "실패했는데 키가 남아 있으면 안 된다"
+    );
+    std::fs::remove_dir_all(&db_path.1).ok();
+}
+
+// ── encryption_enabled 플래그는 정확히 "true"만 참 ────────────────
+//
+// 이 판정이 느슨해지면 암호화된 DB를 평문 DB로 오인해 UI에 암호문을
+// 그대로 내보내게 된다. 값이 다르면 반드시 "꺼짐"으로 판정되어야 한다.
+
+#[test]
+fn test_is_encryption_enabled_matches_only_exact_true() {
+    for value in ["True", "TRUE", "1", "yes", "true ", " true", ""] {
+        let conn = setup_test_db();
+        set_config_impl(&conn, "encryption_enabled", value).unwrap();
+        let status = get_encryption_status_impl(&conn, &crypto_state(None)).unwrap();
+        assert!(
+            !status.enabled,
+            "{value:?}는 활성화로 판정되면 안 된다 (정확히 \"true\"만 참)"
+        );
+    }
+
+    let conn = setup_test_db();
+    set_config_impl(&conn, "encryption_enabled", "true").unwrap();
+    let status = get_encryption_status_impl(&conn, &crypto_state(None)).unwrap();
+    assert!(status.enabled, "\"true\"는 활성화로 판정되어야 한다");
+}
+
+#[test]
+fn test_non_true_flag_leaves_data_readable_as_plaintext_path() {
+    let conn = setup_test_db();
+    let db_path = setup_temp_db_path_state();
+    let crypto = crypto_state(None);
+
+    create_student_impl(&conn, 1, 1, 1, "홍길동", None).unwrap();
+    enable_encryption_impl(&conn, &crypto, &db_path.0, "pw").unwrap();
+
+    // 플래그만 망가뜨리면 앱은 "암호화 꺼짐"으로 보고 키를 요구하지 않는다.
+    // 이때 조회 결과는 평문이 아니라 암호문이어야 한다 — 즉 복호화된 척하지 않는다.
+    set_config_impl(&conn, "encryption_enabled", "TRUE").unwrap();
+    assert!(!get_encryption_status_impl(&conn, &crypto).unwrap().enabled);
+
+    let students = get_students_impl(&conn, None).unwrap();
+    assert_ne!(
+        students[0].name, "홍길동",
+        "플래그가 깨져도 암호문이 평문으로 둔갑하면 안 된다"
+    );
+    std::fs::remove_dir_all(&db_path.1).ok();
+}
