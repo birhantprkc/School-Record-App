@@ -12,8 +12,8 @@ pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<S
              FROM ActivityRecord r
              WHERE NOT EXISTS (
                  SELECT 1 FROM ActivityRecordHistory h
-                 WHERE h.activity_record_id = r.id
-                   AND h.changed_at = r.updated_at
+                 WHERE h.id = (SELECT MAX(h2.id) FROM ActivityRecordHistory h2
+                               WHERE h2.activity_record_id = r.id)
                    AND h.content = r.content
              )",
             [],
@@ -77,7 +77,7 @@ pub fn restore_snapshot_impl(conn: &Connection, snapshot_id: i64) -> Result<i64,
                       FROM ActivityRecordHistory h
                       WHERE h.activity_record_id = ActivityRecord.id
                         AND h.changed_at <= ?1
-                      ORDER BY h.changed_at DESC LIMIT 1),
+                      ORDER BY h.id DESC LIMIT 1),
                      ''
                    ),
                    updated_at = datetime('now')",

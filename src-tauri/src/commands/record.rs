@@ -196,7 +196,7 @@ pub fn get_record_history_impl(
              FROM ActivityRecordHistory h
              JOIN ActivityRecord r ON r.id = h.activity_record_id
              WHERE r.activity_id = ?1 AND r.student_id = ?2
-             ORDER BY h.changed_at DESC
+             ORDER BY h.id DESC
              LIMIT ?3 OFFSET ?4",
         )
         .map_err(|e| e.to_string())?;
@@ -260,8 +260,8 @@ pub fn save_snapshot_internal(
              WHERE r.activity_id = ?1 AND r.student_id = ?2
                AND NOT EXISTS (
                    SELECT 1 FROM ActivityRecordHistory h
-                   WHERE h.activity_record_id = r.id
-                     AND h.changed_at = r.updated_at
+                   WHERE h.id = (SELECT MAX(h2.id) FROM ActivityRecordHistory h2
+                                 WHERE h2.activity_record_id = r.id)
                      AND h.content = r.content
                )",
             rusqlite::params![activity_id, student_id, note],
@@ -272,12 +272,9 @@ pub fn save_snapshot_internal(
         conn.execute(
             "UPDATE ActivityRecordHistory SET note = COALESCE(?3, note)
              WHERE id = (
-                 SELECT h.id FROM ActivityRecordHistory h
+                 SELECT MAX(h.id) FROM ActivityRecordHistory h
                  JOIN ActivityRecord r ON r.id = h.activity_record_id
                  WHERE r.activity_id = ?1 AND r.student_id = ?2
-                   AND h.changed_at = r.updated_at
-                   AND h.content = r.content
-                 LIMIT 1
              )",
             rusqlite::params![activity_id, student_id, note],
         )
@@ -402,8 +399,8 @@ pub fn bulk_import_records_impl(
                  WHERE r.activity_id = ?1 AND r.student_id = ?2
                    AND NOT EXISTS (
                        SELECT 1 FROM ActivityRecordHistory h
-                       WHERE h.activity_record_id = r.id
-                         AND h.changed_at = r.updated_at
+                       WHERE h.id = (SELECT MAX(h2.id) FROM ActivityRecordHistory h2
+                                     WHERE h2.activity_record_id = r.id)
                          AND h.content = r.content
                    )",
                 rusqlite::params![r.activity_id, student_id],

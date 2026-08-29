@@ -334,3 +334,143 @@ fn test_snapshot_still_dedupes_identical_content_at_same_time() {
         .unwrap();
     assert_eq!(count, 1, "내용이 같으면 중복 저장하지 않는 기존 동작은 유지되어야 한다");
 }
+
+// ── 같은 초 동률에서 복원이 엉뚱한 버전을 고르는 문제 ─────────
+//
+// F1으로 "현재 내용이 히스토리에 없는" 구멍은 막았지만, 중복 판정이
+// "그 (내용, 시각) 행이 **어딘가** 있는가"라 A→B→A처럼 값이 되돌아오면
+// 중간값 행이 같은 초에 남는다. restore는 ORDER BY changed_at DESC뿐이라
+// 동률 순서가 미정의고, 중간값 B를 골라 덮어쓸 수 있다.
+//
+// 엑셀에 (학생, 활동) 중복 행 [A, B, A]가 있으면 import 한 번으로 재현된다.
+
+#[test]
+fn test_restore_returns_current_content_after_same_second_aba() {
+    use crate::commands::record::bulk_import_records_impl;
+    use crate::types::ImportRecordInput;
+
+    let conn = setup_test_db();
+    let act = insert_activity(&conn, "발표");
+
+    let row = |content: &str| ImportRecordInput {
+        grade: 1,
+        class_num: 1,
+        number: 1,
+        name: Some("홍길동".to_string()),
+        activity_id: act,
+        content: content.to_string(),
+    };
+
+    // 한 번의 가져오기 안에서 같은 학생·활동이 A → B → A로 세 번 등장한다.
+    bulk_import_records_impl(&conn, &[row("A 내용"), row("B 내용"), row("A 내용")], None).unwrap();
+
+    let stu: i64 = conn
+        .query_row("SELECT id FROM Student LIMIT 1", [], |r| r.get(0))
+        .unwrap();
+    let current: String = conn
+        .query_row(
+            "SELECT content FROM ActivityRecord WHERE activity_id=?1 AND student_id=?2",
+            rusqlite::params![act, stu],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(current, "A 내용", "가져오기 직후 현재 내용은 마지막 행이어야 한다");
+
+    // 스냅샷을 찍고, 이후 내용을 바꾼 뒤 되돌린다.
+    let snap = create_snapshot_impl(&conn, Some("복원 기준".to_string())).unwrap();
+    upsert_record_impl(&conn, act, stu, "그 뒤에 쓴 내용", None).unwrap();
+    restore_snapshot_impl(&conn, snap.id).unwrap();
+
+    let restored: String = conn
+        .query_row(
+            "SELECT content FROM ActivityRecord WHERE activity_id=?1 AND student_id=?2",
+            rusqlite::params![act, stu],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        restored, "A 내용",
+        "스냅샷 시점의 내용으로 돌아와야 한다. 같은 초의 중간값(B)을 고르면 안 된다"
+    );
+}
+
+// ── 기존(레거시) 데이터 안전성 ────────────────────────────────
+//
+// 배포된 사용자 파일에는 초 단위 changed_at으로 기록된 히스토리가 이미 쌓여 있다.
+// 버전 순서를 changed_at에서 id로 옮겨도 그 데이터의 복원 결과가 달라지면 안 된다.
+// (실제 사용자 파일에서 id 순서와 changed_at 순서가 한 건도 어긋나지 않음을 확인했다.
+//  히스토리 행은 항상 그 시점의 updated_at을 복사해 넣고 updated_at은 앞으로만 가므로
+//  레코드별로 id 오름차순 = 시간 오름차순이 구조적으로 성립한다.)
+
+#[test]
+fn test_restore_on_legacy_second_granularity_history() {
+    let conn = setup_test_db();
+    let act = insert_activity(&conn, "발표");
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+    upsert_record_impl(&conn, act, stu, "현재", None).unwrap();
+
+    // 예전 앱이 남긴 모양: 초 단위 시각, 서로 다른 시각, id 오름차순 = 시간 오름차순
+    for (content, at) in [
+        ("3월 내용", "2026-03-01 09:00:00"),
+        ("5월 내용", "2026-05-01 09:00:00"),
+        ("7월 내용", "2026-07-01 09:00:00"),
+    ] {
+        insert_history_at(&conn, act, stu, content, at);
+    }
+
+    // 6월 시점 스냅샷으로 복원하면 그 이전의 가장 최근 버전(5월)이어야 한다.
+    conn.execute(
+        "INSERT INTO Snapshot (memo, created_at) VALUES ('6월', '2026-06-01 09:00:00')",
+        [],
+    )
+    .unwrap();
+    let snap_id: i64 = conn
+        .query_row("SELECT id FROM Snapshot LIMIT 1", [], |r| r.get(0))
+        .unwrap();
+    restore_snapshot_impl(&conn, snap_id).unwrap();
+
+    let restored: String = conn
+        .query_row(
+            "SELECT content FROM ActivityRecord WHERE activity_id=?1 AND student_id=?2",
+            rusqlite::params![act, stu],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        restored, "5월 내용",
+        "레거시 데이터의 시점 필터(changed_at)는 그대로 동작해야 한다"
+    );
+}
+
+#[test]
+fn test_legacy_history_is_never_rewritten_by_new_logic() {
+    let conn = setup_test_db();
+    let act = insert_activity(&conn, "발표");
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+    upsert_record_impl(&conn, act, stu, "현재 내용", None).unwrap();
+    insert_history_at(&conn, act, stu, "예전 내용", "2026-03-01 09:00:00");
+
+    let before: Vec<(i64, String, String)> = conn
+        .prepare("SELECT id, content, changed_at FROM ActivityRecordHistory ORDER BY id")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+
+    // 스냅샷을 여러 번 찍어도 기존 행의 내용·시각은 절대 바뀌지 않아야 한다.
+    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None).unwrap();
+
+    let after: Vec<(i64, String, String)> = conn
+        .prepare("SELECT id, content, changed_at FROM ActivityRecordHistory WHERE id <= ?1 ORDER BY id")
+        .unwrap()
+        .query_map(rusqlite::params![before.last().unwrap().0], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+
+    assert_eq!(before, after, "기존 히스토리 행이 덮어써지면 안 된다");
+}
