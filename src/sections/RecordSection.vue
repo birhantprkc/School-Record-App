@@ -120,7 +120,6 @@ onMounted(async () => {
     event.preventDefault()
     try {
       await flushPendingDebounces()
-      await getCurrentWindow().destroy()
     } catch (e) {
       // 저장에 실패했는데 닫아버리면 내용이 사라진다. 한 번은 멈추고 알린다.
       closeWarned = true
@@ -128,6 +127,19 @@ onMounted(async () => {
           `미저장 내용을 저장하지 못했습니다: ${String(e)}
 ` +
           '내용을 다른 곳에 복사해 두세요. 다시 닫기를 누르면 저장하지 않고 종료합니다.'
+      return
+    }
+    // 저장은 끝났다. 여기서 실패하면 저장 문제가 아니라 창을 닫지 못하는 문제이므로
+    // 메시지를 구분한다(예전에는 저장 실패로 잘못 안내했다).
+    //
+    // destroy에는 core:window:allow-destroy 권한이 필요하다. Tauri의
+    // onCloseRequested 래퍼는 preventDefault를 부르지 않은 경우에도 자기가 destroy를
+    // 호출하므로, 권한이 없으면 **리스너를 등록했다는 사실만으로 앱이 안 닫힌다.**
+    try {
+      await getCurrentWindow().destroy()
+    } catch (e) {
+      closeWarned = true
+      saveError.value = `작업은 저장했지만 창을 닫지 못했습니다: ${String(e)}`
     }
   })
 
