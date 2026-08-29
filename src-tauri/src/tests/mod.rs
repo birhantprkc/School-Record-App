@@ -17,6 +17,7 @@ pub mod synonym_tests;
 pub mod crypto_tests;
 pub mod crypto_cmd_tests;
 pub mod crypto_vector_tests;
+pub mod real_file_tests;
 
 /// 테스트에서 백업 경로가 필요한 경우 사용. 임시 파일을 생성하고 DbPathState를 반환한다.
 /// 반환된 PathBuf(디렉토리)는 테스트 종료 후 직접 삭제해야 한다.
