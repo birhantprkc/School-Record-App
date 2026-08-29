@@ -6,6 +6,9 @@ export const useRecordStore = defineStore('record', () => {
     const gridData = ref(null)
     const loading = ref(false)
     const error = ref('')
+    // 화면을 떠나는 순간 실패한 저장을 알리는 자리. 컴포넌트의 배너는 언마운트와 함께
+    // 사라지므로, 그 경로의 실패는 여기에 담아 워크스페이스가 대신 보여준다.
+    const pendingSaveError = ref('')
 
     // 영역을 빠르게 바꾸면 이전 요청이 나중에 도착할 수 있다. 그때 옛 데이터로
     // gridData를 덮으면, 컴포넌트가 셀 내용은 새 영역 것으로 들고 있으면서
@@ -71,5 +74,5 @@ export const useRecordStore = defineStore('record', () => {
         return await invoke('bulk_quick_replace', {areaId, searchText, replaceWith})
     }
 
-    return {gridData, loading, error, fetchAreaGrid, upsertRecord, fetchRecordHistory, saveHistorySnapshot, previewImportRecords, bulkImportRecords, bulkQuickReplace}
+    return {gridData, loading, error, pendingSaveError, fetchAreaGrid, upsertRecord, fetchRecordHistory, saveHistorySnapshot, previewImportRecords, bulkImportRecords, bulkQuickReplace}
 })

@@ -4,6 +4,7 @@ import {getCurrentWindow} from '@tauri-apps/api/window'
 import {LogicalSize} from '@tauri-apps/api/dpi'
 import {useProjectStore} from '../stores/project'
 import {useConfigStore} from '../stores/configStore'
+import {useRecordStore} from '../stores/record'
 import WorkspaceSidebar from '../components/WorkspaceSidebar.vue'
 import OverviewSection from '../sections/OverviewSection.vue'
 import AreaSection from '../sections/AreaSection.vue'
@@ -20,6 +21,7 @@ import SettingsSection from '../sections/SettingsSection.vue'
 
 const project = useProjectStore()
 const config = useConfigStore()
+const recordStore = useRecordStore()
 const collapsed = ref(false)
 const activeSection = ref('overview')
 const sectionKey = ref(0)
@@ -70,7 +72,19 @@ onMounted(async () => {
         @select="activeSection = $event"
         @openSnapshot="showSnapshotModal = true"
     />
-    <main class="flex-1 overflow-y-auto bg-surface">
+    <main class="flex-1 overflow-y-auto bg-surface flex flex-col">
+      <!-- 화면을 떠나는 순간 저장에 실패한 경우. 그 배너를 띄우던 컴포넌트는 이미
+           사라졌으므로 여기서 대신 보여준다. 사용자가 닫을 때까지 남는다. -->
+      <div
+          v-if="recordStore.pendingSaveError"
+          class="px-6 py-2 border-b border-line-2 shrink-0 bg-red/[0.08] flex items-center gap-3"
+      >
+        <p class="text-base text-red m-0 flex-1">{{ recordStore.pendingSaveError }}</p>
+        <button
+            class="bg-transparent border-none p-0 text-base text-red/70 cursor-pointer hover:text-red hover:underline"
+            @click="recordStore.pendingSaveError = ''"
+        >닫기</button>
+      </div>
       <component :is="currentSection" :key="sectionKey" @navigate="activeSection = $event"/>
     </main>
     <SnapshotModal

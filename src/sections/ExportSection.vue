@@ -76,6 +76,8 @@ const typeLabel = computed(() => {
 // ── 네비게이션 ────────────────────────────────────────────────
 
 async function goNext() {
+  // 이전 단계의 오류 문구가 다음 단계까지 따라와 내보내기가 실패한 것처럼 보였다.
+  exportError.value = ''
   if (isNavigating.value) return
   isNavigating.value = true
   try {
@@ -445,7 +447,7 @@ async function doExport() {
         <h3 class="text-lg font-bold text-ink m-0 mb-1.5">Step 2. 영역(Area) 선택</h3>
         <p class="text-base text-ink-5 m-0 mb-6">내보낼 영역을 선택하세요.</p>
 
-        <p v-if="exportError && areaStore.areas.length === 0" class="text-base text-red mt-3">{{ exportError }}</p>
+        <p v-if="exportError" class="text-base text-red mt-3">{{ exportError }}</p>
         <p v-else-if="areaStore.areas.length === 0" class="text-base text-ink-5 m-0">등록된 영역이 없습니다.</p>
 
         <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
