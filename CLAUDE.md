@@ -39,3 +39,23 @@
 - **GPG 서명 필수**: 모든 커밋에 `-S` 플래그 사용. `git commit -S -m "..."`
 - **Co-Authored-By / Co-Worked 문구 삽입 금지**: 커밋 메시지에 Claude 관련 문구 일절 포함하지 않는다.
 - 커밋 메시지: 한국어 또는 영어, 간결하게 작성.
+
+### PR 머지는 로컬에서 (웹 UI 머지 금지)
+GitHub 웹 UI나 `gh pr merge`로 머지하면 **GitHub이 자기 키(web-flow)로 서명**한다.
+로컬에 그 공개키가 없으면 `git log --format=%G?`에서 `E`(검증 불가)로 뜨고,
+"모든 커밋에 서명" 규칙이 히스토리상 깨진다. 그래서 **로컬에서 머지하고 직접 서명한다.**
+
+```
+git fetch origin
+git checkout master && git pull --ff-only
+git merge --no-ff origin/<PR 브랜치> -m "Merge pull request #N from <브랜치>"
+git log --format="%h %G? %s" -1     # G인지 확인
+git push origin master
+```
+- `commit.gpgsign = true`가 설정돼 있어 `git merge`도 자동으로 서명한다(확인 완료).
+  명시하고 싶으면 `git merge -S`.
+- `--no-ff`로 머지 커밋을 남긴다. PR head가 조상이 되므로 GitHub이 PR을 자동으로
+  Merged 처리한다. 별도로 닫지 않아도 된다.
+- **`merge.verifySignatures`는 켜지 말 것.** dependabot 커밋은 GitHub 키로 서명돼
+  있는데 로컬에 그 공개키가 없어, 켜면 dependabot 브랜치 머지가 전부 거부된다.
+  (굳이 검증하려면 GitHub web-flow 공개키 `4AEE18F83AFDEB23`를 먼저 import.)
