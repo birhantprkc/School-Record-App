@@ -238,3 +238,41 @@ fn test_with_transaction_early_return_inside_closure_rolls_back() {
         .unwrap();
     assert_eq!(count, 0);
 }
+
+// ── constraint_err ───────────────────────────────────────────
+
+#[test]
+fn test_constraint_err_translates_check_violation() {
+    // 진입부 검증이 놓친 CHECK 위반이 영문 원문으로 새어나가지 않는지 확인한다.
+    let conn = crate::tests::setup_test_db();
+    let e = conn
+        .execute(
+            "INSERT INTO Student (grade, class_num, number, name) VALUES (0, 1, 1, '홍길동')",
+            [],
+        )
+        .unwrap_err();
+
+    let msg = crate::state::constraint_err(&e, "중복입니다");
+    assert!(!msg.contains("CHECK constraint"), "영문 원문 노출: {msg}");
+    assert!(msg.contains("허용 범위"), "메시지: {msg}");
+}
+
+#[test]
+fn test_constraint_err_translates_unique_violation() {
+    let conn = crate::tests::setup_test_db();
+    conn.execute("INSERT INTO Activity (name) VALUES ('발표')", []).unwrap();
+    let e = conn
+        .execute("INSERT INTO Activity (name) VALUES ('발표')", [])
+        .unwrap_err();
+
+    assert_eq!(crate::state::constraint_err(&e, "이미 있습니다"), "이미 있습니다");
+}
+
+#[test]
+fn test_constraint_err_passes_through_other_errors() {
+    let conn = crate::tests::setup_test_db();
+    let e = conn.execute("INSERT INTO 없는테이블 (a) VALUES (1)", []).unwrap_err();
+
+    let msg = crate::state::constraint_err(&e, "중복입니다");
+    assert_ne!(msg, "중복입니다", "무관한 오류를 충돌 메시지로 바꾸면 안 된다");
+}

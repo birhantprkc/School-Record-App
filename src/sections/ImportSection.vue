@@ -6,6 +6,7 @@ import {useRecordStore} from '../stores/record.js'
 import {useFileStore} from '../stores/file.js'
 import {AlertTriangle, Download, FileSpreadsheet} from 'lucide-vue-next'
 import {RECORD_COL_ALIASES, STUDENT_COL_ALIASES} from '../data/columnAliases'
+import {isValidIdentityPart, parseStudentId} from '../services/studentId'
 import WizardLayout from '../components/WizardLayout.vue'
 import DiffView from '../components/DiffView.vue'
 import {Workbook} from 'exceljs'
@@ -152,11 +153,6 @@ const allChangedChecked = computed(() =>
     changedPreviewItems.value.every(item => checkedKeys.value.has(item.key))
 )
 
-// 학년·반·번호로 쓸 수 있는 값인지 판정한다. 미리보기 표시와 실제 임포트가
-// 같은 기준을 써야, 미리보기에서 멀쩡해 보이던 행이 조용히 빠지지 않는다.
-function isValidIdentityPart(v) {
-  return Number.isInteger(v) && v >= 1
-}
 
 const studentIdPreviewRows = computed(() => {
   const col = colMap.value.studentId
@@ -350,13 +346,6 @@ function processFile(file) {
   reader.readAsArrayBuffer(file)
 }
 
-function parseStudentId(val) {
-  const s = String(val ?? '').trim().replace(/\D/g, '')
-  if (s.length === 4) return {grade: +s[0], classNum: +s[1], number: +s.slice(2, 4)}
-  if (s.length === 5) return {grade: +s[0], classNum: +s.slice(1, 3), number: +s.slice(3, 5)}
-  if (s.length === 6) return {grade: +s[0], classNum: +s.slice(1, 3), number: +s.slice(3, 6)}
-  return null
-}
 
 function autoDetectColumns() {
   const map = {
