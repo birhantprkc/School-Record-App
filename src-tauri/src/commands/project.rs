@@ -49,11 +49,33 @@ pub(crate) fn open_project_impl(
     Ok(())
 }
 
-pub(crate) fn backup_project_impl(db_path_state: &DbPathState) -> Result<(), String> {
-    let guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
-    let src = guard.as_ref().ok_or("DB path not set")?;
+/// 열 때마다 만드는 백업.
+///
+/// 예전에는 살아 있는 DB 파일을 `fs::copy`로 그대로 떴다. 이 방식은 SQLite 락을
+/// 거치지 않으므로, 다른 쓰기와 겹치면 저널 없이 반쯤 커밋된 페이지를 담은
+/// **조용히 손상된 백업**이 만들어질 수 있다. 정작 필요한 순간에야 발견된다.
+///
+/// `VACUUM INTO`는 SQLite가 직접 일관된 스냅샷을 만든다. 부수 효과로
+/// **프리 페이지를 복사하지 않으므로**, 예전에 프리리스트에 남아 있던 평문이
+/// 백업으로 복제되지도 않는다. 실패 시 대상 파일을 남기지 않는 점도 fs::copy보다 낫다.
+pub(crate) fn backup_project_impl(
+    db_state: &DbState,
+    db_path_state: &DbPathState,
+) -> Result<(), String> {
+    // 락 순서는 코드베이스 공통 순서(DbState → DbPathState)를 따른다. 뒤집으면 교착.
+    let guard = db_state.0.lock().map_err(|e| e.to_string())?;
+    let conn = guard.as_ref().ok_or("열린 프로젝트가 없습니다.")?;
+
+    let path_guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
+    let src = path_guard.as_ref().ok_or("DB path not set")?;
     let dest = crate::engine::unique_backup_path(src, "")?;
-    std::fs::copy(src, &dest).map_err(|e| e.to_string())?;
+    let dest_str = dest
+        .to_str()
+        .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
+
+    // 경로를 SQL에 직접 넣지 않고 바인딩한다 — 한글·역슬래시 이스케이프 문제를 피한다.
+    conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str])
+        .map_err(|e| format!("백업 생성 실패: {e}"))?;
     Ok(())
 }
 
@@ -82,8 +104,8 @@ pub fn open_project(
 }
 
 #[tauri::command]
-pub fn backup_project(db_path: State<DbPathState>) -> Result<(), String> {
-    backup_project_impl(&db_path)
+pub fn backup_project(state: State<DbState>, db_path: State<DbPathState>) -> Result<(), String> {
+    backup_project_impl(&state, &db_path)
 }
 
 pub fn migrate_schema_impl(conn: &mut Connection) -> Result<(), String> {

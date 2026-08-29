@@ -113,3 +113,101 @@ fn test_open_project_clears_crypto_state() {
     drop(db); // Windows: 파일 잠금 해제 후 삭제
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+// ── 열 때 만드는 백업 (감사 F3) ───────────────────────────────
+//
+// 예전에는 살아 있는 DB를 fs::copy로 떠서, 다른 쓰기와 겹치면 조용히 손상된
+// 백업이 만들어질 수 있었다. VACUUM INTO로 바꿔 SQLite가 일관된 스냅샷을
+// 만들게 한다. 부수 효과로 프리 페이지(평문이 남을 수 있는 곳)가 복사되지 않는다.
+
+fn open_states() -> (DbState, DbPathState, CryptoStateHandle, ReplaceCacheState) {
+    (
+        DbState(std::sync::Mutex::new(None)),
+        DbPathState(std::sync::Mutex::new(None)),
+        std::sync::Mutex::new(CryptoState { key: None }),
+        std::sync::Mutex::new(ReplaceCache { ruleset_version: 0, entries: HashMap::new() }),
+    )
+}
+
+fn temp_project_dir(tag: &str) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("bkp_{}_{}_{}", tag, std::process::id(), nanos));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn test_backup_project_produces_valid_readable_copy() {
+    let dir = temp_project_dir("valid");
+    let path = dir.join("학생부.db");
+    let (db, db_path, crypto, cache) = open_states();
+    new_project_impl(path.to_str().unwrap(), "0.2.22", &db, &db_path, &crypto, &cache).unwrap();
+
+    // 데이터를 넣어 백업에 실려야 할 내용을 만든다.
+    {
+        let guard = db.0.lock().unwrap();
+        let conn = guard.as_ref().unwrap();
+        conn.execute("INSERT INTO Student (grade, class_num, number, name) VALUES (1,1,1,'홍길동')", [])
+            .unwrap();
+    }
+
+    crate::commands::project::backup_project_impl(&db, &db_path).unwrap();
+
+    let backups: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.to_string_lossy().ends_with(".db.backup"))
+        .collect();
+    assert_eq!(backups.len(), 1, "백업이 하나 만들어져야 한다");
+
+    // 백업이 실제로 열리고, 무결성이 온전하며, 데이터가 실려 있어야 한다.
+    let bconn = rusqlite::Connection::open(&backups[0]).unwrap();
+    let integrity: String = bconn
+        .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(integrity, "ok", "백업이 손상되면 안 된다");
+
+    let name: String = bconn
+        .query_row("SELECT name FROM Student WHERE grade=1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(name, "홍길동");
+
+    // VACUUM INTO는 프리 페이지를 복사하지 않는다 (평문 잔재가 딸려가지 않는다).
+    let freelist: i64 = bconn
+        .query_row("PRAGMA freelist_count", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(freelist, 0, "백업에 프리 페이지가 남으면 안 된다");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_backup_project_twice_keeps_both() {
+    let dir = temp_project_dir("twice");
+    let path = dir.join("학생부.db");
+    let (db, db_path, crypto, cache) = open_states();
+    new_project_impl(path.to_str().unwrap(), "0.2.22", &db, &db_path, &crypto, &cache).unwrap();
+
+    // 같은 초에 두 번 백업해도 앞의 것을 덮어쓰면 안 된다(F2와 함께 검증).
+    crate::commands::project::backup_project_impl(&db, &db_path).unwrap();
+    crate::commands::project::backup_project_impl(&db, &db_path).unwrap();
+
+    let count = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.to_string_lossy().ends_with(".db.backup"))
+        .count();
+    assert_eq!(count, 2, "두 번째 백업이 첫 번째를 덮어쓰면 안 된다");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_backup_project_without_open_project_errors() {
+    let (db, db_path, _c, _ca) = open_states();
+    let err = crate::commands::project::backup_project_impl(&db, &db_path).unwrap_err();
+    assert!(!err.is_empty(), "열린 프로젝트가 없으면 명시적으로 실패해야 한다");
+}
