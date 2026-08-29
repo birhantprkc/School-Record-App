@@ -26,6 +26,17 @@ const gridData = ref(null)
 const exporting = ref(false)
 const exportResult = ref(null)
 const exportError = ref('')
+
+// setExportCSeparator는 실패 시 되돌리고 던진다. 잡지 않으면 미처리 rejection이 되고,
+// 선택 박스만 이전 값으로 되돌아가 아무 설명 없이 무시된 것처럼 보인다.
+async function changeSeparator(value) {
+  exportError.value = ''
+  try {
+    await configStore.setExportCSeparator(value)
+  } catch (e) {
+    exportError.value = `설정을 저장하지 못했습니다: ${e}`
+  }
+}
 const isNavigating = ref(false)
 
 // ── 초기 데이터 로드 ──────────────────────────────────────────
@@ -259,7 +270,7 @@ async function doExport() {
               <select
                   class="text-base text-ink-2 bg-base border border-line rounded-md px-2 py-1 cursor-pointer hover:border-blue/50 focus:outline-none focus:border-blue/60"
                   :value="configStore.exportCSeparatorKey"
-                  @change="configStore.setExportCSeparator($event.target.value)"
+                  @change="changeSeparator($event.target.value)"
               >
                 <option value="space">공백</option>
                 <option value="newline">줄바꿈 (↵)</option>

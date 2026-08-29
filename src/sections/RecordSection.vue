@@ -79,6 +79,10 @@ const debounceTimers = new Map()
 // 저장에 실패한 셀. 디바운스 타이머는 이미 발동해 사라졌으므로, 이 집합이 없으면
 // 실패한 내용을 다시 저장할 방법이 없다(영역을 바꾸면 그리드가 새로 실리며 사라진다).
 const failedCells = new Set()
+// 진행 중인 저장. 타이머가 발동한 뒤 결과가 나오기 전까지 그 셀은 debounceTimers에도
+// failedCells에도 없다. 이 공백에 영역을 바꾸면 flush가 "저장할 게 없다"고 판단해
+// 그냥 지나가고, 뒤늦게 도착한 실패가 failedCells에 들어가 잘못된 재시도를 부른다.
+const inFlightSaves = new Map()
 const showQuickReplace = ref(false)
 
 // **창을 닫는 경로**에는 onBeforeUnmount가 걸리지 않는다. 섹션 전환은
@@ -86,8 +90,17 @@ const showQuickReplace = ref(false)
 // 프로세스가 내려간다. 디바운스는 키 입력마다 리셋되므로 한 문장을 쉬지 않고 쓴 뒤
 // X를 누르면 그 문장이 통째로 사라졌다. 닫기를 가로채 먼저 저장한다.
 let unlistenClose = null
+let unmounted = false
 // 종료를 막고 경고한 적이 있는가. 두 번째 시도는 통과시켜 갇히지 않게 한다.
 let closeWarned = false
+
+// 종료 경고를 푼다. 예전에는 saveCell 성공에서만 풀려서, 한 번 실패한 뒤 영역 전환
+// flush로 전부 저장돼 정상으로 돌아와도 경고가 남았다. 그 상태의 다음 X 클릭은
+// 저장 시도조차 없이 그대로 종료돼 원래 유실 버그가 되살아났다.
+function clearCloseWarning() {
+  closeWarned = false
+  saveError.value = ''
+}
 
 onMounted(async () => {
   // await보다 먼저 붙여, 첫 렌더 이후의 폭 변화를 놓치지 않게 한다.
@@ -96,7 +109,7 @@ onMounted(async () => {
     resizeObserver.observe(rootEl.value)
   }
 
-  unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
+  const unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
     if (debounceTimers.size === 0 && failedCells.size === 0) return
 
     // 한 번 막고 알린 뒤에도 다시 닫으려 하면 그대로 닫는다.
@@ -118,6 +131,15 @@ onMounted(async () => {
     }
   })
 
+  // 등록은 IPC 왕복이라 await 중에 언마운트될 수 있다. 그러면 onBeforeUnmount는
+  // unlistenClose가 아직 null인 것을 보고 지나가고, 리스너만 영영 남는다.
+  // 죽은 인스턴스의 핸들러가 쌓이면 각자 preventDefault를 불러 앱이 안 닫힌다.
+  if (unmounted) {
+    unlisten()
+    return
+  }
+  unlistenClose = unlisten
+
   try {
     await areaStore.fetchAreas()
   } catch (e) {
@@ -127,6 +149,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
   if (unlistenClose) unlistenClose()
   // 언마운트는 동기라 await할 수 없다. flush를 걸어두면 invoke는 이미 발행되므로
   // 컴포넌트가 사라져도 저장은 끝까지 진행된다(섹션 전환에서 확인된 동작).
@@ -148,6 +171,9 @@ async function reloadGrid(id) {
   // gridData가 null이므로, 최신 응답이 도착할 때까지 재구성을 미룬다.
   if (!recordStore.gridData) return
   cellContent.clear()
+  // cellContent를 갈아치우면 failedCells의 키는 가리킬 내용을 잃는다.
+  // 남겨두면 이후 flush가 엉뚱한 값을 쓰게 된다.
+  failedCells.clear()
   for (const r of recordStore.gridData.records) {
     cellContent.set(cellKey(r.activity_id, r.student_id), r.content)
   }
@@ -157,13 +183,18 @@ async function reloadGrid(id) {
 
 // 전환 실패로 선택을 되돌릴 때 watch가 다시 도는 것을 막는다.
 // 되돌린 값으로 reloadGrid가 돌면 cellContent가 새로 실리며 미저장 내용이 사라진다.
-let revertingArea = false
+//
+// 불리언 가드는 빠른 전환 중 실패와 성공이 겹치면 고착돼, 이후의 정상 전환을
+// 조용히 삼킨다. 되돌릴 대상 값을 담아두되 **매 호출에서 무조건 소비**해 고착을 막고,
+// 값이 실제로 바뀔 때만 표시를 남겨(안 바뀌면 watch가 안 돌아 표시가 떠돈다) 정상
+// 전환을 잘못 삼키지 않게 한다.
+const NO_REVERT = Symbol('no-revert')
+let revertTarget = NO_REVERT
 
 watch(selectedAreaId, async (id, prevId) => {
-  if (revertingArea) {
-    revertingArea = false
-    return
-  }
+  const isRevert = id === revertTarget
+  revertTarget = NO_REVERT
+  if (isRevert) return
   // 영역을 바꾸기 전에 미저장 셀을 먼저 저장한다. 실패하면 전환을 되돌린다 —
   // 선택만 바뀌고 그리드는 이전 영역인 상태로 두면, 화면의 영역명과 내용이
   // 어긋나고 QuickReplace가 미리보기와 다른 영역에 적용될 수 있다.
@@ -173,8 +204,12 @@ watch(selectedAreaId, async (id, prevId) => {
     // 그리드를 지우는 loadError가 아니라 배너(saveError)로 알린다.
     // loadError는 그리드를 통째로 대체해, 저장 못 한 내용을 복사할 수도 없게 만든다.
     saveError.value = `이전 영역의 미저장 내용을 저장하지 못했습니다: ${String(e)}`
-    revertingArea = true
-    selectedAreaId.value = prevId ?? null
+    const back = prevId ?? null
+    // 값이 그대로면 watch가 다시 돌지 않으므로 표시를 남기면 안 된다.
+    if (selectedAreaId.value !== back) {
+      revertTarget = back
+      selectedAreaId.value = back
+    }
     return
   }
   loadError.value = ''
@@ -197,19 +232,37 @@ watch(selectedAreaId, async (id, prevId) => {
 async function flushPendingDebounces() {
   // 대기 중인 타이머 + 저장에 실패했던 셀을 함께 처리한다. 실패한 셀을 빼면
   // 그 내용이 영역 전환·종료 때 조용히 사라진다.
+  // 진행 중인 저장이 끝나기를 먼저 기다린다. 안 기다리면 그 셀은 어느 집합에도 없어
+  // flush가 그냥 지나가고, 뒤늦은 실패가 그리드 재적재 이후에 재시도된다.
+  if (inFlightSaves.size > 0) {
+    await Promise.allSettled([...inFlightSaves.values()])
+  }
+
   const keys = new Set([...debounceTimers.keys(), ...failedCells])
-  if (keys.size === 0) return
+  if (keys.size === 0) {
+    clearCloseWarning()
+    return
+  }
   const saves = []
   for (const key of keys) {
     const timerId = debounceTimers.get(key)
     if (timerId !== undefined) clearTimeout(timerId)
+    // **내용을 지어내지 않는다.** cellContent에 없다는 것은 그리드가 이미 다시
+    // 실렸다는 뜻이라 재시도할 내용 자체가 없다. 예전에는 `?? ''`로 빈 문자열을 써서
+    // 이미 저장돼 있던 내용을 지울 수 있었다 — upsert_record는 히스토리를 남기지
+    // 않으므로 복구 불가다.
+    if (!cellContent.has(key)) {
+      failedCells.delete(key)
+      continue
+    }
     const [actId, stuId] = key.split('-').map(Number)
-    saves.push(recordStore.upsertRecord(actId, stuId, cellContent.get(key) ?? ''))
+    saves.push(recordStore.upsertRecord(actId, stuId, cellContent.get(key)))
   }
   // clear는 await 성공 후에 실행 — 실패 시 재시도에서 다시 flush 가능하도록
   await Promise.all(saves)
   debounceTimers.clear()
   failedCells.clear()
+  clearCloseWarning()
 }
 
 async function handleQuickReplaceDone() {
@@ -398,14 +451,15 @@ async function saveCell(activityId, studentId, content) {
   const stateMap = new Map(savingState.value)
   stateMap.set(key, 'saving')
   savingState.value = stateMap
+  const pending = recordStore.upsertRecord(activityId, studentId, content)
+  inFlightSaves.set(key, pending)
   try {
-    await recordStore.upsertRecord(activityId, studentId, content)
+    await pending
     const next = new Map(savingState.value)
     next.set(key, 'saved')
     savingState.value = next
     failedCells.delete(key)
-    closeWarned = false
-    saveError.value = ''
+    clearCloseWarning()
     setTimeout(() => {
       const clear = new Map(savingState.value)
       clear.delete(key)
@@ -420,6 +474,9 @@ async function saveCell(activityId, studentId, content) {
     // 빨간 셀만으로는 "디스크 가득참"과 "DB 잠김"을 구분할 수 없다.
     // 메시지를 버리지 않고 사용자에게 보여준다.
     saveError.value = `저장하지 못했습니다: ${String(e)}`
+  } finally {
+    // 그 사이 같은 셀에 새 저장이 시작됐다면 그쪽 것을 지우지 않는다.
+    if (inFlightSaves.get(key) === pending) inFlightSaves.delete(key)
   }
 }
 
