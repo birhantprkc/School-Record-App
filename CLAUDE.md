@@ -57,5 +57,18 @@ git push origin master
 - `--no-ff`로 머지 커밋을 남긴다. PR head가 조상이 되므로 GitHub이 PR을 자동으로
   Merged 처리한다. 별도로 닫지 않아도 된다.
 - **`merge.verifySignatures`는 켜지 말 것.** dependabot 커밋은 GitHub 키로 서명돼
-  있는데 로컬에 그 공개키가 없어, 켜면 dependabot 브랜치 머지가 전부 거부된다.
-  (굳이 검증하려면 GitHub web-flow 공개키 `4AEE18F83AFDEB23`를 먼저 import.)
+  있는데 로컬에 그 공개키가 없으면 켜는 순간 머지가 전부 거부된다.
+
+### GitHub 서명 검증용 공개키 (import 완료)
+GitHub이 서명한 커밋이 `%G?`에서 `E`(검증 불가)로 뜨지 않게 하려면 공개키가 필요하다.
+```
+curl -fsSL https://github.com/web-flow.gpg -o web-flow.gpg
+"C:/Program Files/GnuPG/bin/gpg.exe" --import web-flow.gpg
+```
+- **반드시 `gpg.program`이 가리키는 GnuPG에 넣어야 한다.** Git Bash의 `/usr/bin/gpg`는
+  키링이 따로라 거기 넣으면 git이 못 찾는다(실제로 한 번 헛짚었다).
+- 파일에 키가 둘 들어 있다. `4AEE18F83AFDEB23`은 **2024-01-16 만료된 구 키**이고,
+  현재 서명에 쓰이는 것은 `B5690EEEBB952194`다.
+- import 후에도 `%G?`는 `U`(유효하나 신뢰도 미지정)다. `G`로 만들려면 해당 키에
+  ownertrust를 부여해야 하는데, 이는 "이 키가 GitHub의 것"이라는 신뢰 선언이므로
+  선택 사항이다. 검증 자체는 `U`로도 이미 되고 있다.
