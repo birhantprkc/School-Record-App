@@ -26,6 +26,7 @@ const collapsePersonalInfo = computed(() => configStore.recordToolbar.collapsePe
 const collapsedActivities = ref(new Set())
 
 const settingError = ref('')
+const copyError = ref('')
 
 // 토글 저장 실패를 사용자에게 알린다. 저장에 성공했을 때만 true.
 async function setToolbarOption(name, value) {
@@ -389,10 +390,12 @@ function markCopied(setRef, key) {
 
 async function copyCell(activityId, studentId) {
   try {
+    copyError.value = ''
     await navigator.clipboard.writeText(normalizeForCopy(getCellContent(activityId, studentId)))
     markCopied(copiedCells, cellKey(activityId, studentId))
   } catch (e) {
-    console.error('클립보드 복사 실패:', e)
+    // 조용히 넘기면 복사된 줄 알고 붙여넣기 때 빈 내용이 들어간다.
+    copyError.value = `클립보드 복사에 실패했습니다: ${e}`
   }
 }
 
@@ -402,10 +405,11 @@ async function copyStudentRecord(studentId) {
     .filter(c => c !== '')
     .join(configStore.exportCSeparator ?? ' ')
   try {
+    copyError.value = ''
     await navigator.clipboard.writeText(joined)
     markCopied(copiedStudents, studentId)
   } catch (e) {
-    console.error('클립보드 복사 실패:', e)
+    copyError.value = `클립보드 복사에 실패했습니다: ${e}`
   }
 }
 
@@ -593,12 +597,12 @@ function isNewGroup(students, index) {
         </div>
       </div>
 
-      <!-- 설정 저장/로드 실패 알림 -->
+      <!-- 설정 저장/로드·클립보드 복사 실패 알림 -->
       <div
-          v-if="settingError || configStore.preferencesError"
+          v-if="settingError || configStore.preferencesError || copyError"
           class="px-6 py-2 border-b border-line-2 shrink-0 bg-amber/[0.08]"
       >
-        <p class="text-base text-amber m-0">{{ settingError || configStore.preferencesError }}</p>
+        <p class="text-base text-amber m-0">{{ settingError || configStore.preferencesError || copyError }}</p>
       </div>
 
       <!-- 빈 상태: 영역 미선택 -->

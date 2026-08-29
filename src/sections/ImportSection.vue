@@ -704,6 +704,7 @@ function resetWizard() {
   checkedKeys.value = new Set()
   diffViewMode.value = 'raw'
   pendingRecords.value = []
+  skippedRowCount.value = 0
 }
 </script>
 
