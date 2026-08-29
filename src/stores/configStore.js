@@ -132,16 +132,30 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     async function setRecordCellFontSize(size) {
+        const prev = recordCellFontSize.value
         recordCellFontSize.value = size
-        await invoke('set_config', { key: RECORD_CELL_SIZE_KEY, value: String(size) })
+        try {
+            await invoke('set_config', { key: RECORD_CELL_SIZE_KEY, value: String(size) })
+        } catch (e) {
+            recordCellFontSize.value = prev
+            throw e
+        }
     }
 
     const exportCSeparator = computed(() => SEPARATOR_MAP[exportCSeparatorKey.value] ?? ' ')
 
     async function setExportCSeparator(key) {
         if (!(key in SEPARATOR_MAP)) return
+        // 저장 실패 시 되돌린다. 안 되돌리면 화면 값과 DB가 어긋난 채 남아,
+        // 재시작하면 사용자가 고른 값이 사라진 것처럼 보인다.
+        const prev = exportCSeparatorKey.value
         exportCSeparatorKey.value = key
-        await invoke('set_config', { key: EXPORT_C_SEPARATOR_KEY, value: key })
+        try {
+            await invoke('set_config', { key: EXPORT_C_SEPARATOR_KEY, value: key })
+        } catch (e) {
+            exportCSeparatorKey.value = prev
+            throw e
+        }
     }
 
     async function unlockEncryption(password) {

@@ -29,6 +29,7 @@ const step = ref(1)
 const editingId = ref(null)
 const editForm = ref({oldText: '', newText: '', priority: 0, isRegex: false})
 const editError = ref('')
+const loadError = ref('')
 const operationError = ref('')
 const isAdjusting = ref(false)
 
@@ -241,7 +242,13 @@ function resetWizard() {
 
 // ── 마운트 ─────────────────────────────────────────────────
 onMounted(async () => {
-  await Promise.all([ruleStore.fetchRules(), areaStore.fetchAreas()])
+  // fetchAreas는 실패 시 다시 던진다. 잡지 않으면 미처리 rejection이 되고,
+  // 화면에는 "등록된 영역이 없습니다"만 떠 읽기 실패와 데이터 없음이 구분되지 않는다.
+  try {
+    await Promise.all([ruleStore.fetchRules(), areaStore.fetchAreas()])
+  } catch (e) {
+    loadError.value = `목록을 불러오지 못했습니다: ${String(e)}`
+  }
 })
 </script>
 
@@ -338,6 +345,7 @@ onMounted(async () => {
           </div>
 
           <p v-if="ruleStore.error" class="text-red text-base m-0 mt-2">{{ ruleStore.error }}</p>
+          <p v-if="loadError" class="text-red text-base m-0 mt-2">{{ loadError }}</p>
           <p v-if="operationError" class="text-red text-base m-0 mt-2">{{ operationError }}</p>
 
           <!-- 규칙 테이블 -->

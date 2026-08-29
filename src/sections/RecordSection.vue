@@ -1,5 +1,6 @@
 ﻿<script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {getCurrentWindow} from '@tauri-apps/api/window'
 import {ALargeSmall, ArrowLeftRight, ArrowUpDown, Circle, CircleAlert, ChevronsRight, Eye, EyeOff, Maximize2, Minimize2, Moon, Pin, PinOff, Search, Sun} from 'lucide-vue-next'
 import {useAreaStore} from '../stores/area'
 import {useRecordStore} from '../stores/record'
@@ -75,7 +76,16 @@ function toggleActivity(actId) {
 const savingState = ref(new Map())
 const cellContent = reactive(new Map())
 const debounceTimers = new Map()
+// 저장에 실패한 셀. 디바운스 타이머는 이미 발동해 사라졌으므로, 이 집합이 없으면
+// 실패한 내용을 다시 저장할 방법이 없다(영역을 바꾸면 그리드가 새로 실리며 사라진다).
+const failedCells = new Set()
 const showQuickReplace = ref(false)
+
+// **창을 닫는 경로**에는 onBeforeUnmount가 걸리지 않는다. 섹션 전환은
+// <component :is>가 언마운트를 일으키지만, 앱을 닫으면 Vue는 언마운트되지 않고
+// 프로세스가 내려간다. 디바운스는 키 입력마다 리셋되므로 한 문장을 쉬지 않고 쓴 뒤
+// X를 누르면 그 문장이 통째로 사라졌다. 닫기를 가로채 먼저 저장한다.
+let unlistenClose = null
 
 onMounted(async () => {
   // await보다 먼저 붙여, 첫 렌더 이후의 폭 변화를 놓치지 않게 한다.
@@ -83,6 +93,19 @@ onMounted(async () => {
     resizeObserver = new ResizeObserver(onRootResize)
     resizeObserver.observe(rootEl.value)
   }
+
+  unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
+    if (debounceTimers.size === 0 && failedCells.size === 0) return
+    event.preventDefault()
+    try {
+      await flushPendingDebounces()
+      await getCurrentWindow().destroy()
+    } catch (e) {
+      // 저장에 실패했는데 닫아버리면 내용이 사라진다. 닫기를 멈추고 알린다.
+      saveError.value = `미저장 내용을 저장하지 못해 종료를 멈췄습니다: ${String(e)}`
+    }
+  })
+
   try {
     await areaStore.fetchAreas()
   } catch (e) {
@@ -92,8 +115,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (unlistenClose) unlistenClose()
   // 언마운트는 동기라 await할 수 없다. flush를 걸어두면 invoke는 이미 발행되므로
-  // 컴포넌트가 사라져도 저장은 끝까지 진행된다. 실패는 삼키지 않고 남긴다.
+  // 컴포넌트가 사라져도 저장은 끝까지 진행된다(섹션 전환에서 확인된 동작).
   flushPendingDebounces().catch(e => {
     console.error('미저장 셀 flush 실패:', e)
   })
@@ -119,13 +143,26 @@ async function reloadGrid(id) {
   await resyncHeights()
 }
 
-watch(selectedAreaId, async (id) => {
-  // 영역을 바꾸기 전에 미저장 셀을 먼저 저장한다. 실패하면 전환을 멈추고 알린다 —
-  // 여기서 조용히 넘어가면 방금 쓴 내용이 사라진다.
+// 전환 실패로 선택을 되돌릴 때 watch가 다시 도는 것을 막는다.
+// 되돌린 값으로 reloadGrid가 돌면 cellContent가 새로 실리며 미저장 내용이 사라진다.
+let revertingArea = false
+
+watch(selectedAreaId, async (id, prevId) => {
+  if (revertingArea) {
+    revertingArea = false
+    return
+  }
+  // 영역을 바꾸기 전에 미저장 셀을 먼저 저장한다. 실패하면 전환을 되돌린다 —
+  // 선택만 바뀌고 그리드는 이전 영역인 상태로 두면, 화면의 영역명과 내용이
+  // 어긋나고 QuickReplace가 미리보기와 다른 영역에 적용될 수 있다.
   try {
     await flushPendingDebounces()
   } catch (e) {
-    loadError.value = `이전 영역의 미저장 내용을 저장하지 못했습니다: ${String(e)}`
+    // 그리드를 지우는 loadError가 아니라 배너(saveError)로 알린다.
+    // loadError는 그리드를 통째로 대체해, 저장 못 한 내용을 복사할 수도 없게 만든다.
+    saveError.value = `이전 영역의 미저장 내용을 저장하지 못했습니다: ${String(e)}`
+    revertingArea = true
+    selectedAreaId.value = prevId ?? null
     return
   }
   loadError.value = ''
@@ -146,16 +183,21 @@ watch(selectedAreaId, async (id) => {
 // 디바운스 대기 중인 셀을 즉시 DB에 저장한다.
 // QuickReplace는 DB를 직접 읽어 교체하므로, 실행 전에 미저장 내용을 먼저 반영해야 한다.
 async function flushPendingDebounces() {
-  if (debounceTimers.size === 0) return
+  // 대기 중인 타이머 + 저장에 실패했던 셀을 함께 처리한다. 실패한 셀을 빼면
+  // 그 내용이 영역 전환·종료 때 조용히 사라진다.
+  const keys = new Set([...debounceTimers.keys(), ...failedCells])
+  if (keys.size === 0) return
   const saves = []
-  for (const [key, timerId] of debounceTimers) {
-    clearTimeout(timerId)
+  for (const key of keys) {
+    const timerId = debounceTimers.get(key)
+    if (timerId !== undefined) clearTimeout(timerId)
     const [actId, stuId] = key.split('-').map(Number)
     saves.push(recordStore.upsertRecord(actId, stuId, cellContent.get(key) ?? ''))
   }
   // clear는 await 성공 후에 실행 — 실패 시 재시도에서 다시 flush 가능하도록
   await Promise.all(saves)
   debounceTimers.clear()
+  failedCells.clear()
 }
 
 async function handleQuickReplaceDone() {
@@ -349,6 +391,7 @@ async function saveCell(activityId, studentId, content) {
     const next = new Map(savingState.value)
     next.set(key, 'saved')
     savingState.value = next
+    failedCells.delete(key)
     saveError.value = ''
     setTimeout(() => {
       const clear = new Map(savingState.value)
@@ -359,6 +402,8 @@ async function saveCell(activityId, studentId, content) {
     const next = new Map(savingState.value)
     next.set(key, 'error')
     savingState.value = next
+    // 타이머는 이미 발동해 사라졌으므로 여기 담아두지 않으면 재시도할 길이 없다.
+    failedCells.add(key)
     // 빨간 셀만으로는 "디스크 가득참"과 "DB 잠김"을 구분할 수 없다.
     // 메시지를 버리지 않고 사용자에게 보여준다.
     saveError.value = `저장하지 못했습니다: ${String(e)}`

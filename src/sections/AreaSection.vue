@@ -31,10 +31,11 @@ const areaStudentModalRef = ref(null)
 const saving = ref(false)
 
 onMounted(() => {
-  // 실패는 store의 error를 통해 화면에 표시된다. 여기서는 rejection만 흡수한다.
+  // 자기 스토어의 실패는 화면에 렌더되지만, 교차 스토어(다른 섹션 소유)의 실패는
+  // 이 화면에 표시되지 않는다. 모달의 선택 목록이 비어 보일 수 있으므로 로그는 남긴다.
   areaStore.fetchAreas().catch(() => {})
-  activityStore.fetchActivities().catch(() => {})
-  studentStore.fetchStudents().catch(() => {})
+  activityStore.fetchActivities().catch(e => console.error('activityStore.fetchActivities() 실패:', e))
+  studentStore.fetchStudents().catch(e => console.error('studentStore.fetchStudents() 실패:', e))
 })
 
 function openAddModal() {
