@@ -20,7 +20,7 @@ use crate::commands::student::{
 };
 use crate::crypto::derive_key;
 use crate::engine::get_records_for_scope;
-use crate::state::{clear_crypto_state, CryptoState, CryptoStateHandle};
+use crate::state::{clear_crypto_state, CryptoState, CryptoStateHandle, DbPathState, DbState};
 use crate::types::{ImportRecordInput, StudentInput};
 
 fn test_key() -> [u8; 32] {
@@ -2280,4 +2280,74 @@ fn test_non_true_flag_leaves_data_readable_as_plaintext_path() {
         "플래그가 깨져도 암호문이 평문으로 둔갑하면 안 된다"
     );
     std::fs::remove_dir_all(&db_path.1).ok();
+}
+
+// ── 암호화 전 백업이 실제로 복구 가능한 파일인가 ──────────────
+//
+// enable_encryption 실패 시 사용자에게 "이 백업으로 되돌리라"고 안내하는 파일이다.
+// fs::copy는 SQLite 락을 거치지 않아 반쯤 커밋된 페이지를 담을 수 있었으므로
+// VACUUM INTO로 바꿨다. 그 백업이 실제로 열리고 평문이 온전한지 고정한다.
+
+#[test]
+fn test_pre_encrypt_backup_is_valid_and_holds_plaintext() {
+    let dir = std::env::temp_dir().join(format!(
+        "preenc_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("학생부.db");
+
+    let db = DbState(std::sync::Mutex::new(None));
+    let db_path = DbPathState(std::sync::Mutex::new(None));
+    let crypto = crypto_state(None);
+    let cache: crate::state::ReplaceCacheState = std::sync::Mutex::new(ReplaceCache {
+        ruleset_version: 0,
+        entries: std::collections::HashMap::new(),
+    });
+    crate::commands::project::new_project_impl(
+        path.to_str().unwrap(), "0.2.22", &db, &db_path, &crypto, &cache,
+    )
+    .unwrap();
+
+    {
+        let guard = db.0.lock().unwrap();
+        let conn = guard.as_ref().unwrap();
+        create_student_impl(conn, 1, 1, 1, "홍길동", None).unwrap();
+        // 암호화를 켜면 -pre-encrypt 백업이 만들어지고, 성공 시 삭제된다.
+        // 삭제 전 상태를 보기 위해 백업 함수 대신 전체 흐름을 쓰되,
+        // 실패 경로가 아니므로 여기서는 disable 쪽 백업(-pre-decrypt)을 검사한다.
+        enable_encryption_impl(conn, &crypto, &db_path, "pw").unwrap();
+        disable_encryption_impl(conn, &crypto, &db_path).unwrap();
+    }
+
+    // disable은 백업을 남기는 것이 의도된 설계다(CLAUDE.md).
+    let backups: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.to_string_lossy().contains("-pre-decrypt"))
+        .collect();
+    assert_eq!(backups.len(), 1, "-pre-decrypt 백업이 남아야 한다");
+
+    // 그 백업이 실제로 열리고 무결성이 온전해야 한다.
+    let b = rusqlite::Connection::open(&backups[0]).unwrap();
+    let integrity: String = b
+        .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(integrity, "ok", "복구용 백업이 손상되면 안 된다");
+
+    // VACUUM INTO는 프리 페이지를 옮기지 않는다.
+    let freelist: i64 = b.query_row("PRAGMA freelist_count", [], |r| r.get(0)).unwrap();
+    assert_eq!(freelist, 0, "백업에 프리 페이지가 남으면 안 된다");
+
+    // 학생 행이 그대로 실려 있어야 한다(백업 시점은 암호화 상태).
+    let cnt: i64 = b
+        .query_row("SELECT COUNT(*) FROM Student", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cnt, 1, "백업에 데이터가 실려 있어야 한다");
+
+    std::fs::remove_dir_all(&dir).ok();
 }

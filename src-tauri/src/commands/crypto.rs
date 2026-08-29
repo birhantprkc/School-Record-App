@@ -177,11 +177,29 @@ pub(crate) fn unlock_encryption_impl(
 ///
 /// 반환한 경로는 반드시 받아야 한다. `-pre-encrypt`와 `-pre-reencrypt` 백업은
 /// 작업이 성공하면 지워야 하기 때문이다. 이유는 각 호출부 주석 참고.
-fn backup_db_file(db_path_state: &DbPathState, suffix: &str) -> Result<PathBuf, String> {
+/// 암호화 전후 복구용 백업.
+///
+/// 실패 시 사용자에게 "이 백업으로 되돌리라"고 안내하는 파일이므로, 열 때 만드는
+/// 백업(backup_project_impl)보다 오히려 온전함이 중요하다. fs::copy는 SQLite 락을
+/// 거치지 않아 다른 쓰기와 겹치면 반쯤 커밋된 페이지를 담은 파일이 나올 수 있었다.
+///
+/// **호출부는 반드시 트랜잭션 밖이어야 한다** — VACUUM은 트랜잭션 안에서 실행되지
+/// 않는다. enable/disable/change 세 경로 모두 with_transaction 이전에 호출한다.
+/// DbState 락은 커맨드 래퍼가 이미 잡고 있으므로(conn을 넘겨받는다) 여기서는
+/// DbPathState만 잡아 DbState → DbPathState 순서를 유지한다.
+fn backup_db_file(
+    conn: &Connection,
+    db_path_state: &DbPathState,
+    suffix: &str,
+) -> Result<PathBuf, String> {
     let guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = guard.as_ref().ok_or("열린 프로젝트가 없습니다.")?;
     let dest = crate::engine::unique_backup_path(src, suffix)?;
-    std::fs::copy(src, &dest).map_err(|e| e.to_string())?;
+    let dest_str = dest
+        .to_str()
+        .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
+    conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str])
+        .map_err(|e| format!("백업 생성 실패: {e}"))?;
     Ok(dest)
 }
 
@@ -246,7 +264,7 @@ pub(crate) fn enable_encryption_impl(
 
     // 암호화 도중 실패하면 되돌릴 수 있도록 평문 상태를 복사해 둔다.
     // 성공하면 반드시 지운다 — 평문 사본이 DB 옆에 남으면 암호화를 켠 의미가 없다.
-    let backup = backup_db_file(db_path_state, "-pre-encrypt")?;
+    let backup = backup_db_file(conn, db_path_state, "-pre-encrypt")?;
 
     let salt = generate_salt();
     let key = derive_key(password, &salt);
@@ -278,7 +296,7 @@ pub(crate) fn disable_encryption_impl(
 
     // 이 백업은 지우지 않는다. 암호문 사본이고, 성공하면 본 DB가 평문이 되므로
     // 백업 쪽이 오히려 덜 위험하다. 실수로 암호화를 끈 경우의 안전망으로 남긴다.
-    backup_db_file(db_path_state, "-pre-decrypt")?;
+    backup_db_file(conn, db_path_state, "-pre-decrypt")?;
 
     with_transaction(conn, || {
         decrypt_all_data(conn, key)?;
@@ -313,7 +331,7 @@ pub(crate) fn change_encryption_password_impl(
 
     // 이 백업은 옛 비밀번호로 계속 열린다. 비밀번호가 새어서 바꾼 경우라면
     // 백업을 남겨두는 것이 변경 자체를 무의미하게 만들므로 성공 시 지운다.
-    let backup = backup_db_file(db_path_state, "-pre-reencrypt")?;
+    let backup = backup_db_file(conn, db_path_state, "-pre-reencrypt")?;
 
     let new_salt = generate_salt();
     let new_key = derive_key(new_password, &new_salt);
