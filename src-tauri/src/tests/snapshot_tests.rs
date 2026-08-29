@@ -238,3 +238,99 @@ fn test_restore_snapshot_correct_version_with_multiple_histories() {
         .unwrap();
     assert_eq!(content, "버전2", "스냅샷 시점 기준 직전 최신 히스토리로 복원되어야 함");
 }
+
+// ── 같은 초에 내용이 바뀐 경우 (감사 F1) ──────────────────────
+//
+// 히스토리 중복 판정이 changed_at == updated_at만 보면, 같은 초에 이미 다른 내용의
+// 히스토리 행이 있을 때 스냅샷이 0행을 넣고도 성공한 것처럼 보인다. 그 상태로
+// 복원하면 현재 내용이 아니라 옛 내용이 돌아온다.
+//
+// updated_at은 초 단위라 엑셀에 (학생, 활동) 중복 행이 있으면 import 한 번으로
+// 결정론적으로 만들어진다. 아래 테스트는 그 상황을 SQL로 직접 재현한다.
+
+/// 같은 activity_record에 대해 지정한 시각의 히스토리 행을 만든다.
+fn insert_history_at(conn: &rusqlite::Connection, act: i64, stu: i64, content: &str, at: &str) {
+    conn.execute(
+        "INSERT INTO ActivityRecordHistory (activity_record_id, content, changed_at, note)
+         SELECT r.id, ?3, ?4, 'stale'
+         FROM ActivityRecord r WHERE r.activity_id = ?1 AND r.student_id = ?2",
+        rusqlite::params![act, stu, content, at],
+    )
+    .unwrap();
+}
+
+fn set_updated_at(conn: &rusqlite::Connection, act: i64, stu: i64, at: &str) {
+    conn.execute(
+        "UPDATE ActivityRecord SET updated_at = ?3 WHERE activity_id = ?1 AND student_id = ?2",
+        rusqlite::params![act, stu, at],
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_snapshot_captures_current_content_despite_same_second_history() {
+    let conn = setup_test_db();
+    let act = insert_activity(&conn, "발표");
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+
+    // 같은 초에 옛 내용의 히스토리가 이미 있고, 현재 내용은 그와 다르다.
+    upsert_record_impl(&conn, act, stu, "최종 내용", None).unwrap();
+    set_updated_at(&conn, act, stu, "2026-01-01 09:00:00");
+    insert_history_at(&conn, act, stu, "옛 내용", "2026-01-01 09:00:00");
+
+    create_snapshot_impl(&conn, None).unwrap();
+
+    // 현재 내용이 히스토리에 반드시 담겨야 한다.
+    let captured: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM ActivityRecordHistory WHERE content = '최종 내용'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        captured, 1,
+        "같은 초에 다른 내용의 히스토리가 있다고 현재 내용을 건너뛰면 안 된다"
+    );
+}
+
+#[test]
+fn test_snapshot_does_not_relabel_stale_row_as_if_saved() {
+    let conn = setup_test_db();
+    let act = insert_activity(&conn, "발표");
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+
+    upsert_record_impl(&conn, act, stu, "최종 내용", None).unwrap();
+    set_updated_at(&conn, act, stu, "2026-01-01 09:00:00");
+    insert_history_at(&conn, act, stu, "옛 내용", "2026-01-01 09:00:00");
+
+    crate::commands::record::save_snapshot_internal(&conn, act, stu, Some("치환 적용 전")).unwrap();
+
+    // 옛 내용 행의 note를 덧씌우면, 저장하지 않은 것을 저장한 것처럼 보이게 된다.
+    let mislabeled: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM ActivityRecordHistory
+             WHERE content = '옛 내용' AND note = '치환 적용 전'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(mislabeled, 0, "저장하지 않은 행에 note를 덧씌우면 안 된다");
+}
+
+#[test]
+fn test_snapshot_still_dedupes_identical_content_at_same_time() {
+    let conn = setup_test_db();
+    let act = insert_activity(&conn, "발표");
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+    upsert_record_impl(&conn, act, stu, "그대로", None).unwrap();
+
+    // 변경 없이 두 번 스냅샷하면 히스토리는 하나여야 한다(기존 동작 유지).
+    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None).unwrap();
+
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM ActivityRecordHistory", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1, "내용이 같으면 중복 저장하지 않는 기존 동작은 유지되어야 한다");
+}

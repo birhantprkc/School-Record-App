@@ -262,6 +262,7 @@ pub fn save_snapshot_internal(
                    SELECT 1 FROM ActivityRecordHistory h
                    WHERE h.activity_record_id = r.id
                      AND h.changed_at = r.updated_at
+                     AND h.content = r.content
                )",
             rusqlite::params![activity_id, student_id, note],
         )
@@ -275,6 +276,7 @@ pub fn save_snapshot_internal(
                  JOIN ActivityRecord r ON r.id = h.activity_record_id
                  WHERE r.activity_id = ?1 AND r.student_id = ?2
                    AND h.changed_at = r.updated_at
+                   AND h.content = r.content
                  LIMIT 1
              )",
             rusqlite::params![activity_id, student_id, note],
@@ -395,6 +397,7 @@ pub fn bulk_import_records_impl(
                        SELECT 1 FROM ActivityRecordHistory h
                        WHERE h.activity_record_id = r.id
                          AND h.changed_at = r.updated_at
+                         AND h.content = r.content
                    )",
                 rusqlite::params![r.activity_id, student_id],
             )

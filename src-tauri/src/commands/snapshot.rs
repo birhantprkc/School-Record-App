@@ -14,6 +14,7 @@ pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<S
                  SELECT 1 FROM ActivityRecordHistory h
                  WHERE h.activity_record_id = r.id
                    AND h.changed_at = r.updated_at
+                   AND h.content = r.content
              )",
             [],
         )
