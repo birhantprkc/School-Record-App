@@ -88,6 +88,9 @@ onBeforeUnmount(() => {
 async function reloadGrid(id) {
   await recordStore.fetchAreaGrid(id)
   if (selectedAreaId.value !== id) return
+  // 늦게 도착한 응답은 store에 반영되지 않는다. 아직 아무것도 실린 적이 없으면
+  // gridData가 null이므로, 최신 응답이 도착할 때까지 재구성을 미룬다.
+  if (!recordStore.gridData) return
   cellContent.clear()
   for (const r of recordStore.gridData.records) {
     cellContent.set(cellKey(r.activity_id, r.student_id), r.content)

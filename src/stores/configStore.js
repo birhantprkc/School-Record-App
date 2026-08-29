@@ -141,18 +141,30 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     async function enableEncryption(password) {
-        await invoke('enable_encryption', { password })
-        await refreshEncryptionStatus()
+        try {
+            await invoke('enable_encryption', { password })
+        } finally {
+            // 커밋 뒤 마무리 단계(백업 삭제·VACUUM)에서 실패해도 DB는 이미 암호화되어
+            // 있다. 갱신하지 않으면 화면은 '비활성화됨'인데 다시 켜면 '이미 활성화
+            // 되어 있습니다' 오류가 나서 사용자가 상황을 이해할 수 없다.
+            await refreshEncryptionStatus()
+        }
     }
 
     async function disableEncryption() {
-        await invoke('disable_encryption')
-        await refreshEncryptionStatus()
+        try {
+            await invoke('disable_encryption')
+        } finally {
+            await refreshEncryptionStatus()
+        }
     }
 
     async function changeEncryptionPassword(oldPassword, newPassword) {
-        await invoke('change_encryption_password', { oldPassword, newPassword })
-        await refreshEncryptionStatus()
+        try {
+            await invoke('change_encryption_password', { oldPassword, newPassword })
+        } finally {
+            await refreshEncryptionStatus()
+        }
     }
 
     return {

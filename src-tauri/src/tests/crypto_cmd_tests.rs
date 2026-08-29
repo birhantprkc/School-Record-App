@@ -2150,23 +2150,42 @@ fn test_purge_free_pages_clears_freelist() {
 }
 
 #[test]
-fn test_enable_encryption_leaves_no_free_pages() {
+fn test_enable_encryption_purges_free_pages() {
     // 암호화는 행을 제자리에서 UPDATE하므로 옛 페이지에 평문이 남는다.
+    //
+    // 이 테스트가 의미를 가지려면 (1) 암호화 전에 free page가 넉넉히 있어야 하고
+    // (2) 암호화가 그것을 다 써버리지 않아야 한다. 암호문은 평문보다 길어서
+    // UPDATE가 freelist에서 페이지를 가져다 쓴다. 그래서 긴 기록을 많이 만들었다
+    // 지워 free page를 크게 만들고, 남겨서 암호화할 대상은 적게 둔다.
+    // 그러지 않으면 purge_free_pages를 호출하지 않아도 통과하는 허수 테스트가 된다.
     let conn = setup_test_db();
     let crypto = crypto_state(None);
     let (db_path, tmp_dir) = setup_temp_db_path_state();
+
     let act_id = insert_activity(&conn, "발표");
-    for i in 1..=200 {
+    let long_text = "긴 활동 기록 내용을 여러 번 반복한다. ".repeat(40);
+    let mut throwaway = Vec::new();
+    for i in 1..=300 {
         let stu_id = insert_student(&conn, 1, 1, i, &format!("학생{i}"));
-        upsert_record_impl(&conn, act_id, stu_id, "긴 활동 기록 내용을 여러 번 반복한다. ".repeat(20).as_str(), None).unwrap();
+        upsert_record_impl(&conn, act_id, stu_id, &long_text, None).unwrap();
+        if i > 5 {
+            throwaway.push(stu_id);
+        }
     }
+    // 지우면 기록도 CASCADE로 사라지면서 페이지가 freelist로 간다.
+    for stu_id in throwaway {
+        conn.execute("DELETE FROM Student WHERE id = ?1", rusqlite::params![stu_id])
+            .unwrap();
+    }
+    let before = freelist_count(&conn);
+    assert!(before > 100, "암호화 전 free page가 충분해야 한다: {before}");
 
     enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
 
     assert_eq!(
         freelist_count(&conn),
         0,
-        "암호화 후 평문이 남은 free page가 없어야 한다"
+        "암호화가 끝나면 평문이 남은 free page가 없어야 한다 (VACUUM 미호출 의심)"
     );
     std::fs::remove_dir_all(&tmp_dir).ok();
 }

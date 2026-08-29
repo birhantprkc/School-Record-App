@@ -35,9 +35,15 @@ describe('byteLength', () => {
     expect(byteLength('😀')).toBe(4)
   })
 
-  it('실제 생기부 문장 길이', () => {
-    const s = '수업에 적극적으로 참여함.'
-    expect(byteLength(s)).toBe(new TextEncoder().encode(s).length)
+  it('여러 줄 기록: 한글 바이트 + 줄바꿈 2바이트', () => {
+    // '가나' 6 + CRLF 2 + '다' 3 = 11
+    expect(byteLength('가나\n다')).toBe(11)
+  })
+
+  it('제한 경계에서 LF를 1바이트로 세면 초과를 놓친다', () => {
+    // 줄바꿈 100개짜리 기록: CRLF 기준 200바이트, LF 기준이면 100바이트.
+    // 제한이 150이라면 앱은 통과시키지만 NEIS는 거부한다.
+    expect(byteLength('\n'.repeat(100))).toBe(200)
   })
 })
 

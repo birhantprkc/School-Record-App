@@ -275,4 +275,5 @@ fn test_constraint_err_passes_through_other_errors() {
 
     let msg = crate::state::constraint_err(&e, "중복입니다");
     assert_ne!(msg, "중복입니다", "무관한 오류를 충돌 메시지로 바꾸면 안 된다");
+    assert_eq!(msg, e.to_string(), "무관한 오류는 원문 그대로 넘겨야 한다");
 }
