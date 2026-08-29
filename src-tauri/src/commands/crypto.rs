@@ -173,11 +173,10 @@ pub(crate) fn unlock_encryption_impl(
     set_crypto_state(crypto, key)
 }
 
-/// DB 파일을 같은 폴더에 복사하고 그 경로를 반환한다.
+/// 암호화 전후 복구용 백업. 만든 경로를 반환한다.
 ///
 /// 반환한 경로는 반드시 받아야 한다. `-pre-encrypt`와 `-pre-reencrypt` 백업은
 /// 작업이 성공하면 지워야 하기 때문이다. 이유는 각 호출부 주석 참고.
-/// 암호화 전후 복구용 백업.
 ///
 /// 실패 시 사용자에게 "이 백업으로 되돌리라"고 안내하는 파일이므로, 열 때 만드는
 /// 백업(backup_project_impl)보다 오히려 온전함이 중요하다. fs::copy는 SQLite 락을
@@ -198,8 +197,13 @@ fn backup_db_file(
     let dest_str = dest
         .to_str()
         .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
-    conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str])
-        .map_err(|e| format!("백업 생성 실패: {e}"))?;
+    // 중간에 실패하면 만들다 만 파일이 남는다. 이 앱은 백업을 스캔하지도 지우지도
+    // 않으므로(의도된 설계), 남겨두면 나중에 수동 복구할 때 빈 파일을 정상 백업으로
+    // 착각할 수 있다. unique_backup_path가 없는 이름만 주므로 지워도 안전하다.
+    if let Err(e) = conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str]) {
+        std::fs::remove_file(&dest).ok();
+        return Err(format!("백업 생성 실패: {e}"));
+    }
     Ok(dest)
 }
 

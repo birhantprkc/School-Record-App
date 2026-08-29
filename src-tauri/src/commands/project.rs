@@ -57,7 +57,10 @@ pub(crate) fn open_project_impl(
 ///
 /// `VACUUM INTO`는 SQLite가 직접 일관된 스냅샷을 만든다. 부수 효과로
 /// **프리 페이지를 복사하지 않으므로**, 예전에 프리리스트에 남아 있던 평문이
-/// 백업으로 복제되지도 않는다. 실패 시 대상 파일을 남기지 않는 점도 fs::copy보다 낫다.
+/// 백업으로 복제되지도 않는다.
+///
+/// 실패해도 파일이 안 남는 것은 아니다 — 만들기 전에 실패하면 안 남지만 중간에
+/// 실패하면 만들다 만 파일이 남는다. 그래서 실패 시 직접 지운다.
 pub(crate) fn backup_project_impl(
     db_state: &DbState,
     db_path_state: &DbPathState,
@@ -74,8 +77,10 @@ pub(crate) fn backup_project_impl(
         .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
 
     // 경로를 SQL에 직접 넣지 않고 바인딩한다 — 한글·역슬래시 이스케이프 문제를 피한다.
-    conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str])
-        .map_err(|e| format!("백업 생성 실패: {e}"))?;
+    if let Err(e) = conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str]) {
+        std::fs::remove_file(&dest).ok();
+        return Err(format!("백업 생성 실패: {e}"));
+    }
     Ok(())
 }
 

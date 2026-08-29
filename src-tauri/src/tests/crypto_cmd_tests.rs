@@ -2284,12 +2284,18 @@ fn test_non_true_flag_leaves_data_readable_as_plaintext_path() {
 
 // ── 암호화 전 백업이 실제로 복구 가능한 파일인가 ──────────────
 //
-// enable_encryption 실패 시 사용자에게 "이 백업으로 되돌리라"고 안내하는 파일이다.
+// 암호화 백업은 실패 시 사용자에게 "이 백업으로 되돌리라"고 안내하는 파일이다.
 // fs::copy는 SQLite 락을 거치지 않아 반쯤 커밋된 페이지를 담을 수 있었으므로
-// VACUUM INTO로 바꿨다. 그 백업이 실제로 열리고 평문이 온전한지 고정한다.
+// VACUUM INTO로 바꿨다.
+//
+// **이 테스트가 보증하는 것**: 백업이 실제로 열리고, 무결성이 온전하며, 데이터가
+// 실려 있다. disable은 백업을 남기는 것이 의도된 설계이므로 -pre-decrypt를 본다.
+// **보증하지 못하는 것**: fs::copy의 원래 실패 모드(동시 쓰기로 찢어진 사본)는
+// 단일 스레드 정지 상태에서 재현되지 않으므로 이 테스트로는 잡히지 않는다.
+// 즉 회귀 방지용이지, VACUUM INTO 전환의 근거는 아니다.
 
 #[test]
-fn test_pre_encrypt_backup_is_valid_and_holds_plaintext() {
+fn test_disable_encryption_backup_is_valid_and_readable() {
     let dir = std::env::temp_dir().join(format!(
         "preenc_{}_{}",
         std::process::id(),

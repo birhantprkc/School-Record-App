@@ -68,6 +68,11 @@ pub fn restore_snapshot_impl(conn: &Connection, snapshot_id: i64) -> Result<i64,
         )
         .map_err(|_| format!("스냅샷을 찾을 수 없습니다. id={snapshot_id}"))?;
 
+    // 시점 필터는 changed_at, 버전 선택은 id다. 레코드별로 changed_at이 id 순서와
+    // 함께 증가하기 때문에 성립하는데, 이는 **시계가 뒤로 가지 않는다는 전제**에
+    // 기댄다. PC 시계를 과거로 되돌리면 더 큰 id가 더 이른 시각을 가질 수 있고,
+    // 그러면 필터 안에서 id가 가장 큰 행이 스냅샷 이후에 쓴 내용일 수 있다.
+    // 되돌린 내용은 히스토리 모달에 그대로 남으므로 영구 손실은 아니다.
     with_transaction(conn, || {
         let rows = conn
             .execute(
