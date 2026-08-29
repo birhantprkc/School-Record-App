@@ -6,15 +6,11 @@ import {Workbook} from 'exceljs'
 import * as XLSX from 'xlsx'
 import {useStudentStore} from '../stores/student.js'
 import {useFileStore} from '../stores/file.js'
+import {STUDENT_COL_ALIASES} from '../data/columnAliases'
 import {save} from '@tauri-apps/plugin-dialog'
 import {SAMPLE_CSV} from '../data/sampleStudentCsv.ts'
 
-const COL_ALIASES = {
-  grade: ['학년', 'grade'],
-  classNum: ['반', 'class', '학급', '반번호', 'classnum', 'class_num'],
-  number: ['번호', 'number', 'num', '번', '출석번호'],
-  name: ['이름', 'name', '성명', '학생명', '학생이름'],
-}
+const COL_ALIASES = STUDENT_COL_ALIASES
 
 const emit = defineEmits(['close', 'imported'])
 

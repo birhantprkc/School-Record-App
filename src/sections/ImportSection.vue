@@ -5,6 +5,7 @@ import {useActivityStore} from '../stores/activity.js'
 import {useRecordStore} from '../stores/record.js'
 import {useFileStore} from '../stores/file.js'
 import {AlertTriangle, Download, FileSpreadsheet} from 'lucide-vue-next'
+import {RECORD_COL_ALIASES, STUDENT_COL_ALIASES} from '../data/columnAliases'
 import WizardLayout from '../components/WizardLayout.vue'
 import DiffView from '../components/DiffView.vue'
 import {Workbook} from 'exceljs'
@@ -17,15 +18,7 @@ const activityStore = useActivityStore()
 const recordStore = useRecordStore()
 const fileStore = useFileStore()
 
-const COL_ALIASES = {
-  grade: ['학년', 'grade'],
-  classNum: ['반', 'class', '학급', '반번호', 'classnum', 'class_num'],
-  number: ['번호', 'number', 'num', '번', '출석번호'],
-  name: ['이름', 'name', '성명', '학생명', '학생이름'],
-  activityName: ['활동명', '활동 명', '활동', '분류', 'activity', 'activity_name', 'activityname'],
-  activityContent: ['활동내용', '활동 내용', '내용', 'content', '기록', '활동기록'],
-  studentId: ['학번', 'studentid', 'student_id'],
-}
+const COL_ALIASES = {...STUDENT_COL_ALIASES, ...RECORD_COL_ALIASES}
 
 const FIELD_LABELS_A = {
   grade: '학년', classNum: '반', number: '번호',
