@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {ref} from 'vue'
-import {AlertTriangle, FileOutput, KeyRound, Moon, Shield, ShieldOff, Sun} from 'lucide-vue-next'
+import {AlertTriangle, Eraser, FileOutput, KeyRound, Moon, Shield, ShieldOff, Sun} from 'lucide-vue-next'
 import {useConfigStore} from '../stores/configStore'
 import PasswordModal from '../components/PasswordModal.vue'
 
@@ -33,6 +33,22 @@ const passwordLoading = ref(false)
 const statusEncryptMessage = ref('')
 const confirmEncryptDisable = ref(false)
 const disableEncryptLoading = ref(false)
+const purgeLoading = ref(false)
+
+// 파일을 열 때 자동으로 재시도하지만, 그것마저 실패하면 표시가 남는다.
+// 원인(디스크 여유 공간 등)을 해결한 뒤 파일을 닫았다 열지 않고도 정리할 수 있게 한다.
+async function handleRetryPurge() {
+  purgeLoading.value = true
+  statusEncryptMessage.value = ''
+  try {
+    await config.retryEncryptionPurge()
+    statusEncryptMessage.value = '파일 정리를 완료했습니다.'
+  } catch (e) {
+    statusEncryptMessage.value = '오류: ' + String(e)
+  } finally {
+    purgeLoading.value = false
+  }
+}
 
 function openSetup() {
   passwordModalMode.value = 'setup'
@@ -220,6 +236,30 @@ async function handlePasswordSubmit(payload) {
             데이터를 복구할 수 없습니다.
             비밀번호를 잊지 않도록 반드시 주의해 주세요.
           </span>
+        </div>
+
+        <!-- 정리 미완료 알림 -->
+        <div
+            v-if="config.purgePending"
+            class="flex items-start gap-2 px-3.5 py-2.5 rounded-btn bg-amber/[0.07] border border-amber/20 text-base text-amber leading-relaxed mb-[18px]"
+        >
+          <AlertTriangle :size="16" class="flex-shrink-0 mt-1"/>
+          <div class="flex flex-col items-start gap-2.5">
+            <span>
+              암호화를 켜거나 비밀번호를 바꾼 뒤의 <strong>파일 정리가 끝나지 않았습니다.</strong>
+              파일 안에 이전 데이터의 흔적이 남아 있을 수 있습니다.
+              파일을 다시 열면 자동으로 다시 시도합니다.
+              정리가 계속 실패하는 원인은 아래 버튼을 누르면 확인할 수 있습니다.
+            </span>
+            <button
+                class="flex items-center gap-2 px-[18px] py-[9px] rounded-btn text-base font-medium cursor-pointer transition-[background-color,transform] border bg-amber/15 border-amber/35 text-amber enabled:hover:bg-amber/25 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+                :disabled="purgeLoading"
+                @click="handleRetryPurge"
+            >
+              <Eraser :size="16"/>
+              {{ purgeLoading ? '정리 중…' : '지금 정리' }}
+            </button>
+          </div>
         </div>
 
         <!-- 버튼 -->

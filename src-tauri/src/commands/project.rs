@@ -40,6 +40,18 @@ pub(crate) fn open_project_impl(
     validate_existing_path(path, "파일이 존재하지 않거나 접근할 수 없습니다.")?;
     let src = std::path::Path::new(&path);
     let conn = crate::db::open_existing(src).map_err(|e| e.to_string())?;
+
+    // 지난번에 끝내지 못한 정리(VACUUM)를 이어서 실행한다.
+    //
+    // 실패해도 파일 열기를 막지 않는다. 정리는 잔재를 지우는 뒷정리일 뿐이고,
+    // 여기서 막으면 읽기 전용 매체나 디스크 여유가 없는 상황에서 사용자가 자기
+    // 파일을 아예 열 수 없게 된다. 데이터를 잃는 것보다 잔재가 남는 편이 낫다.
+    //
+    // 조용히 넘기는 것은 아니다. 실패하면 표시가 그대로 남고,
+    // get_encryption_status가 purge_pending으로 알려 설정 화면에 경고와
+    // "지금 정리" 버튼이 표시된다.
+    let _ = crate::commands::crypto::resume_pending_purge(&conn);
+
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
     *guard = Some(conn);
     *db_path_state.0.lock().map_err(|e| e.to_string())? = Some(src.to_path_buf());

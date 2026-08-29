@@ -24,10 +24,26 @@ const localError = ref('')
 const isSetupMode = computed(() => props.mode === 'setup')
 const isChangeMode = computed(() => props.mode === 'change')
 
+// 새로 설정하는 비밀번호의 최소 길이. 백엔드(crypto.rs MIN_PASSWORD_LEN)와 같은 값이며,
+// 최종 판정도 백엔드가 한다. 여기서 먼저 막는 것은 왕복 없이 바로 알려주기 위해서다.
+const MIN_PASSWORD_LENGTH = 4
+
+// 코드 포인트로 센다. "가나다"는 9바이트지만 3글자이므로, 백엔드의 chars().count()와
+// 세는 기준을 맞춰야 화면과 서버의 판정이 갈리지 않는다.
+function charLength(value) {
+  return [...value].length
+}
+
 const title = computed(() => {
   if (props.mode === 'unlock') return '비밀번호 확인'
   if (props.mode === 'setup') return '암호화 비밀번호 설정'
   return '비밀번호 변경'
+})
+
+const passwordPlaceholder = computed(() => {
+  if (props.mode === 'change') return '현재 비밀번호'
+  if (props.mode === 'setup') return `비밀번호 입력 (최소 ${MIN_PASSWORD_LENGTH}자)`
+  return '비밀번호 입력'
 })
 
 const submitLabel = computed(() => {
@@ -48,6 +64,12 @@ function validate() {
   }
 
   if (isSetupMode.value) {
+    // 하한은 새로 정하는 비밀번호에만 건다. 잠금 해제(unlock)에 걸면 이 규칙이
+    // 생기기 전에 짧은 비밀번호로 암호화한 파일을 열 수 없게 된다.
+    if (charLength(password.value) < MIN_PASSWORD_LENGTH) {
+      localError.value = `비밀번호는 최소 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`
+      return false
+    }
     if (password.value !== confirmPassword.value) {
       localError.value = '비밀번호와 확인 비밀번호가 일치하지 않습니다.'
       return false
@@ -57,6 +79,10 @@ function validate() {
   if (isChangeMode.value) {
     if (!newPassword.value) {
       localError.value = '새 비밀번호를 입력해주세요.'
+      return false
+    }
+    if (charLength(newPassword.value) < MIN_PASSWORD_LENGTH) {
+      localError.value = `새 비밀번호는 최소 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`
       return false
     }
     if (newPassword.value !== confirmPassword.value) {
@@ -116,7 +142,7 @@ function handleCancel() {
             <input
                 :type="showPassword ? 'text' : 'password'"
                 v-model="password"
-                :placeholder="mode === 'change' ? '현재 비밀번호' : '비밀번호 입력'"
+                :placeholder="passwordPlaceholder"
                 class="w-full py-2.5 pr-10 pl-3.5 bg-base border border-line-2 rounded-btn text-ink text-base outline-none transition-colors focus:border-blue-2 box-border placeholder:text-ink-5"
                 @keydown.enter="handleSubmit"
                 autofocus
@@ -137,7 +163,7 @@ function handleCancel() {
             <input
                 :type="showNewPassword ? 'text' : 'password'"
                 v-model="newPassword"
-                placeholder="새 비밀번호 입력"
+                :placeholder="`새 비밀번호 입력 (최소 ${MIN_PASSWORD_LENGTH}자)`"
                 class="w-full py-2.5 pr-10 pl-3.5 bg-base border border-line-2 rounded-btn text-ink text-base outline-none transition-colors focus:border-blue-2 box-border placeholder:text-ink-5"
                 @keydown.enter="handleSubmit"
             />

@@ -5,7 +5,9 @@ use rusqlite::Connection;
 use crate::commands::config::set_config_impl;
 use crate::commands::crypto::{
     change_encryption_password_impl, combine_all, disable_encryption_impl, enable_encryption_impl,
-    get_encryption_status_impl, purge_free_pages, resolve_data_key, unlock_encryption_impl,
+    get_encryption_status_impl, is_purge_pending, purge_free_pages, resolve_data_key,
+    resume_pending_purge, retry_pending_purge_impl, unlock_encryption_impl,
+    with_purge_marked_transaction,
 };
 use crate::commands::record::{
     bulk_import_records_impl, get_area_grid_impl, get_record_history_impl,
@@ -18,7 +20,7 @@ use crate::state::ReplaceCache;
 use crate::commands::student::{
     bulk_upsert_students_impl, create_student_impl, get_students_impl, update_student_impl,
 };
-use crate::crypto::derive_key;
+use crate::crypto::{derive_key, encrypt, generate_salt};
 use crate::engine::get_records_for_scope;
 use crate::state::{clear_crypto_state, CryptoState, CryptoStateHandle, DbPathState, DbState};
 use crate::types::{ImportRecordInput, StudentInput};
@@ -1187,7 +1189,7 @@ fn test_change_password_then_reload() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
-// ── 빈 패스워드 거부 테스트 ───────────────────────────────────────────
+// ── 비밀번호 최소 길이 ───────────────────────────────────
 
 #[test]
 fn test_enable_encryption_rejects_empty_password() {
@@ -1211,6 +1213,328 @@ fn test_change_password_rejects_empty_new_password() {
     assert!(result.unwrap_err().contains("비밀번호"));
     std::fs::remove_dir_all(&tmp_dir).ok();
 }
+
+#[test]
+fn test_enable_encryption_rejects_password_below_minimum() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+
+    let result = enable_encryption_impl(&conn, &crypto, &db_path, "123");
+
+    assert!(result.is_err(), "3자는 거부되어야 한다");
+    // 검사에서 막혔으면 백업도 만들지 않아야 한다.
+    assert!(
+        !backup_exists(&tmp_dir, "-pre-encrypt"),
+        "길이 검사에서 막힌 요청이 백업을 남기면 안 된다"
+    );
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_enable_encryption_accepts_exactly_minimum_length() {
+    // 하한은 4자 "미만"을 막는다. 4자(핀 번호 길이)는 허용이다.
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+
+    enable_encryption_impl(&conn, &crypto, &db_path, "1234").unwrap();
+
+    assert!(get_encryption_status_impl(&conn, &crypto).unwrap().enabled);
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_change_password_rejects_new_password_below_minimum() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+
+    let result = change_encryption_password_impl(&conn, &crypto, &db_path, "password", "abc");
+
+    assert!(result.is_err(), "새 비밀번호 3자는 거부되어야 한다");
+    // 거부됐으면 옛 비밀번호가 그대로 살아 있어야 한다.
+    clear_crypto_state(&crypto).unwrap();
+    unlock_encryption_impl(&conn, &crypto, "password").unwrap();
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_password_minimum_counts_characters_not_bytes() {
+    // "가나다"는 UTF-8로 9바이트지만 3글자다. 바이트 길이로 세면 통과해버려
+    // 한글 사용자에게만 하한이 사라진다.
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+
+    assert!(
+        enable_encryption_impl(&conn, &crypto, &db_path, "가나다").is_err(),
+        "한글 3글자도 거부되어야 한다"
+    );
+    enable_encryption_impl(&conn, &crypto, &db_path, "가나다라").unwrap();
+
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+/// 하한이 생기기 전에 만든 짧은 비밀번호 파일은 계속 열려야 한다.
+///
+/// 하한을 unlock에도 걸면, 사용자는 올바른 비밀번호를 알면서도 자기 파일을 영영
+/// 열 수 없게 된다. enable_encryption_impl로는 이제 3자짜리를 만들 수 없으므로
+/// salt와 검증 토큰을 직접 써 넣어 그런 파일을 재현한다.
+#[test]
+fn test_unlock_accepts_short_password_created_before_minimum() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+
+    let salt = generate_salt();
+    let key = derive_key("123", &salt);
+    // crypto.rs의 VERIFY_PLAINTEXT와 같은 값 — 저장 형식을 함께 고정한다.
+    let token = encrypt("school-record-verify", &key).unwrap();
+    set_config_impl(&conn, "encryption_pbkdf2_salt", &B64.encode(salt)).unwrap();
+    set_config_impl(&conn, "encryption_verify_token", &token).unwrap();
+    set_config_impl(&conn, "encryption_enabled", "true").unwrap();
+
+    unlock_encryption_impl(&conn, &crypto, "123").unwrap();
+
+    assert!(
+        resolve_data_key(&conn, &crypto).unwrap().is_some(),
+        "짧은 비밀번호로 만든 기존 파일도 열려야 한다"
+    );
+}
+
+// ── 정리(VACUUM) 재시도 표시 ──────────────────────────────
+
+#[test]
+fn test_enable_encryption_clears_purge_pending_on_success() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+
+    assert!(
+        !is_purge_pending(&conn).unwrap(),
+        "정리까지 끝났으면 표시가 남아 있으면 안 된다"
+    );
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_change_password_clears_purge_pending_on_success() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+    change_encryption_password_impl(&conn, &crypto, &db_path, "password", "new-password").unwrap();
+
+    assert!(!is_purge_pending(&conn).unwrap());
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
+#[test]
+fn test_resume_pending_purge_is_noop_without_flag() {
+    let conn = setup_test_db();
+    resume_pending_purge(&conn).unwrap();
+    assert!(!is_purge_pending(&conn).unwrap());
+}
+
+#[test]
+fn test_resume_pending_purge_clears_flag_and_freelist() {
+    // 커밋은 끝났는데 VACUUM 직전에 프로세스가 죽은 상태를 흉내낸다.
+    let conn = setup_test_db();
+    for i in 0..500 {
+        insert_activity(&conn, &format!("활동{i}"));
+    }
+    conn.execute_batch("DELETE FROM Activity;").unwrap();
+    assert!(freelist_count(&conn) > 0, "free page가 있어야 테스트가 의미 있다");
+    set_config_impl(&conn, "encryption_purge_pending", "암호화").unwrap();
+
+    resume_pending_purge(&conn).unwrap();
+
+    assert_eq!(freelist_count(&conn), 0, "밀린 정리가 실제로 실행되어야 한다");
+    assert!(!is_purge_pending(&conn).unwrap(), "성공했으면 표시를 지워야 한다");
+}
+
+#[test]
+fn test_resume_pending_purge_keeps_encrypted_data_readable() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let act_id = insert_activity(&conn, "발표");
+    let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
+    upsert_record_impl(&conn, act_id, stu_id, "활동 기록", None).unwrap();
+
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+    std::fs::remove_dir_all(&tmp_dir).ok();
+
+    // 정리가 밀린 상태를 만들고 이어받는다.
+    set_config_impl(&conn, "encryption_purge_pending", "암호화").unwrap();
+    resume_pending_purge(&conn).unwrap();
+
+    let key = resolve_data_key(&conn, &crypto).unwrap();
+    assert_eq!(get_students_impl(&conn, key).unwrap()[0].name, "홍길동");
+    let stored: String = conn
+        .query_row(
+            "SELECT content FROM ActivityRecord WHERE activity_id=?1 AND student_id=?2",
+            rusqlite::params![act_id, stu_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        crate::crypto::maybe_decrypt(stored, key).unwrap(),
+        "활동 기록"
+    );
+    assert!(!is_purge_pending(&conn).unwrap());
+}
+
+#[test]
+fn test_status_reports_purge_pending() {
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    assert!(
+        !get_encryption_status_impl(&conn, &crypto)
+            .unwrap()
+            .purge_pending
+    );
+
+    set_config_impl(&conn, "encryption_purge_pending", "암호화").unwrap();
+
+    assert!(
+        get_encryption_status_impl(&conn, &crypto)
+            .unwrap()
+            .purge_pending,
+        "정리가 밀려 있으면 화면에 알릴 수 있어야 한다"
+    );
+}
+
+#[test]
+fn test_retry_pending_purge_errors_when_nothing_pending() {
+    // 무음 실패 금지 — 누를 것이 없으면 그렇다고 말해야 한다.
+    let conn = setup_test_db();
+    let err = retry_pending_purge_impl(&conn).unwrap_err();
+    assert!(err.contains("정리할 항목이 없습니다"), "에러 메시지: {err}");
+}
+
+#[test]
+fn test_retry_pending_purge_clears_flag() {
+    let conn = setup_test_db();
+    set_config_impl(&conn, "encryption_purge_pending", "비밀번호 변경").unwrap();
+    retry_pending_purge_impl(&conn).unwrap();
+    assert!(!is_purge_pending(&conn).unwrap());
+}
+
+/// 파일 DB 하나와, VACUUM을 막을 두 번째 연결을 만든다.
+///
+/// `BEGIN IMMEDIATE`는 RESERVED 락을 잡는다. 읽기는 통과하므로 파일을 여는 것은
+/// 되지만, 쓰기가 필요한 VACUUM은 SQLITE_BUSY로 실패한다. 디스크가 가득 찬 상황을
+/// 흉내내는 것보다 확실하고 빠르다.
+///
+/// 표시는 락을 걸기 **전에** 심는다. RESERVED가 잡힌 뒤에는 어떤 쓰기도 막히므로,
+/// 나중에 심으려 하면 테스트하려는 VACUUM 실패가 아니라 준비 단계에서 넘어진다.
+fn file_db_with_vacuum_blocked(pending: &str) -> (Connection, Connection, std::path::PathBuf) {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "school_record_purge_fail_{}_{}",
+        std::process::id(),
+        nanos
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("test.db");
+    let conn = crate::db::create_new(&path).unwrap();
+    set_config_impl(&conn, "encryption_purge_pending", pending).unwrap();
+
+    let blocker = Connection::open(&path).unwrap();
+    blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+    (conn, blocker, dir)
+}
+
+#[test]
+fn test_with_purge_marked_transaction_commits_flag_with_the_change() {
+    // 표시는 호출부가 고르는 것이 아니라 이 헬퍼가 항상 함께 커밋한다.
+    let conn = setup_test_db();
+
+    with_purge_marked_transaction(&conn, "암호화", || {
+        insert_activity(&conn, "발표");
+        Ok(())
+    })
+    .unwrap();
+
+    assert!(is_purge_pending(&conn).unwrap(), "정리 표시가 커밋되어야 한다");
+}
+
+#[test]
+fn test_purge_mark_rolls_back_with_the_change() {
+    // 데이터 변경이 롤백되면 표시도 함께 사라져야 한다. 남으면 멀쩡한 파일에
+    // 쓸데없는 VACUUM이 걸리고, "정리가 밀렸다"는 경고까지 뜬다.
+    let conn = setup_test_db();
+
+    let err = with_purge_marked_transaction(&conn, "암호화", || {
+        insert_activity(&conn, "발표");
+        Err("일부러 실패".to_string())
+    })
+    .unwrap_err();
+
+    assert_eq!(err, "일부러 실패");
+    assert!(!is_purge_pending(&conn).unwrap(), "롤백되면 표시도 없어야 한다");
+    let activities: i64 = conn
+        .query_row("SELECT COUNT(*) FROM Activity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(activities, 0, "같은 트랜잭션이면 데이터도 함께 롤백된다");
+}
+
+#[test]
+fn test_resume_pending_purge_keeps_flag_when_vacuum_fails() {
+    // 실패했는데 표시를 지우면 다시 시도할 근거가 사라진다.
+    let (conn, blocker, dir) = file_db_with_vacuum_blocked("암호화");
+
+    let err = resume_pending_purge(&conn).unwrap_err();
+
+    assert!(err.contains("암호화"), "무엇을 하다 남았는지 알려야 한다: {err}");
+    assert!(
+        is_purge_pending(&conn).unwrap(),
+        "정리에 실패하면 표시가 남아 다음에 다시 시도되어야 한다"
+    );
+
+    blocker.execute_batch("ROLLBACK").unwrap();
+    drop(blocker);
+    drop(conn);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_retry_pending_purge_keeps_flag_when_vacuum_fails() {
+    let (conn, blocker, dir) = file_db_with_vacuum_blocked("비밀번호 변경");
+
+    assert!(retry_pending_purge_impl(&conn).is_err());
+    assert!(is_purge_pending(&conn).unwrap());
+
+    blocker.execute_batch("ROLLBACK").unwrap();
+    drop(blocker);
+    drop(conn);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_disable_encryption_keeps_purge_pending_flag() {
+    // 암호화를 켜다 만 파일을 해제해도 잔재는 남아 있을 수 있다.
+    // 표시를 남겨두면 다음에 열 때 정리된다. 손해는 VACUUM 한 번뿐이다.
+    let conn = setup_test_db();
+    let crypto = crypto_state(None);
+    let (db_path, tmp_dir) = setup_temp_db_path_state();
+
+    enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
+    set_config_impl(&conn, "encryption_purge_pending", "암호화").unwrap();
+    disable_encryption_impl(&conn, &crypto, &db_path).unwrap();
+
+    assert!(is_purge_pending(&conn).unwrap());
+    std::fs::remove_dir_all(&tmp_dir).ok();
+}
+
 
 // ── 레거시 스냅샷 × 암호화 활성화 경계 테스트 ────────────────────────
 //
@@ -1929,7 +2253,9 @@ fn test_change_password_when_not_enabled_returns_error() {
     let conn = setup_test_db();
     let crypto = crypto_state(None);
     let (db_path, tmp_dir) = setup_temp_db_path_state();
-    let result = change_encryption_password_impl(&conn, &crypto, &db_path, "old", "new");
+    // 길이 하한에 걸리지 않는 비밀번호를 써야 "설정이 없다"는 판정을 검증할 수 있다.
+    let result =
+        change_encryption_password_impl(&conn, &crypto, &db_path, "old-password", "new-password");
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("암호화 설정이 없습니다"));
     std::fs::remove_dir_all(&tmp_dir).ok();
@@ -2150,6 +2476,22 @@ fn test_purge_free_pages_clears_freelist() {
 }
 
 #[test]
+fn test_purge_free_pages_preserves_user_version() {
+    // VACUUM이 user_version을 초기화하면, 정리할 때마다 DB가 구버전으로 보여
+    // 열 때마다 마이그레이션이 다시 돌게 된다.
+    let conn = setup_test_db();
+    conn.pragma_update(None, "user_version", crate::db::SCHEMA_VERSION)
+        .unwrap();
+
+    purge_free_pages(&conn, "테스트").unwrap();
+
+    let version: u32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, crate::db::SCHEMA_VERSION);
+}
+
+#[test]
 fn test_enable_encryption_purges_free_pages() {
     // 암호화는 행을 제자리에서 UPDATE하므로 옛 페이지에 평문이 남는다.
     //
@@ -2267,7 +2609,7 @@ fn test_non_true_flag_leaves_data_readable_as_plaintext_path() {
     let crypto = crypto_state(None);
 
     create_student_impl(&conn, 1, 1, 1, "홍길동", None).unwrap();
-    enable_encryption_impl(&conn, &crypto, &db_path.0, "pw").unwrap();
+    enable_encryption_impl(&conn, &crypto, &db_path.0, "password").unwrap();
 
     // 플래그만 망가뜨리면 앱은 "암호화 꺼짐"으로 보고 키를 요구하지 않는다.
     // 이때 조회 결과는 평문이 아니라 암호문이어야 한다 — 즉 복호화된 척하지 않는다.
@@ -2326,7 +2668,7 @@ fn test_disable_encryption_backup_is_valid_and_readable() {
         // 암호화를 켜면 -pre-encrypt 백업이 만들어지고, 성공 시 삭제된다.
         // 삭제 전 상태를 보기 위해 백업 함수 대신 전체 흐름을 쓰되,
         // 실패 경로가 아니므로 여기서는 disable 쪽 백업(-pre-decrypt)을 검사한다.
-        enable_encryption_impl(conn, &crypto, &db_path, "pw").unwrap();
+        enable_encryption_impl(conn, &crypto, &db_path, "password").unwrap();
         disable_encryption_impl(conn, &crypto, &db_path).unwrap();
     }
 

@@ -211,3 +211,96 @@ fn test_backup_project_without_open_project_errors() {
     let err = crate::commands::project::backup_project_impl(&db, &db_path).unwrap_err();
     assert!(!err.is_empty(), "열린 프로젝트가 없으면 명시적으로 실패해야 한다");
 }
+
+
+// ── 열 때 밀린 정리(VACUUM) 이어받기 ─────────────────────
+
+/// 암호화 직후 커밋은 됐지만 VACUUM 전에 프로세스가 죽은 파일을 흉내낸다.
+/// 예전에는 그 잔재를 지울 방법이 앱 안에 없었다.
+#[test]
+fn test_open_project_resumes_pending_purge() {
+    let dir = temp_project_dir("resume_purge");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("pending.db");
+    {
+        let conn = crate::db::create_new(&path).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO APP_CONFIGS (config_key, config_value) \
+             VALUES ('encryption_purge_pending', ?1)",
+            ["암호화"],
+        )
+        .unwrap();
+    }
+
+    let (db, db_path, crypto, cache) = open_states();
+    open_project_impl(path.to_str().unwrap(), &db, &db_path, &crypto, &cache).unwrap();
+
+    let guard = db.0.lock().unwrap();
+    let conn = guard.as_ref().unwrap();
+    assert!(
+        !crate::commands::crypto::is_purge_pending(conn).unwrap(),
+        "파일을 열면 밀린 정리를 이어서 끝내고 표시를 지워야 한다"
+    );
+
+    drop(guard);
+    drop(db);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// 표시가 없는 평범한 파일은 열기 경로가 그대로여야 한다.
+#[test]
+fn test_open_project_without_pending_flag_is_unaffected() {
+    let dir = temp_project_dir("no_pending_purge");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plain.db");
+    drop(crate::db::create_new(&path).unwrap());
+
+    let (db, db_path, crypto, cache) = open_states();
+    open_project_impl(path.to_str().unwrap(), &db, &db_path, &crypto, &cache).unwrap();
+
+    let guard = db.0.lock().unwrap();
+    assert!(!crate::commands::crypto::is_purge_pending(guard.as_ref().unwrap()).unwrap());
+
+    drop(guard);
+    drop(db);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// 정리에 실패해도 파일은 열려야 한다.
+///
+/// 뒷정리 실패로 파일을 아예 못 열게 되면, 읽기 전용 매체나 디스크 여유가 없는
+/// 사용자가 자기 기록에 접근할 수 없다. 잔재가 남는 편이 낫다.
+#[test]
+fn test_open_project_succeeds_even_if_purge_fails() {
+    let dir = temp_project_dir("purge_fail_open");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("busy.db");
+    {
+        let conn = crate::db::create_new(&path).unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO APP_CONFIGS (config_key, config_value) \
+             VALUES ('encryption_purge_pending', ?1)",
+            ["암호화"],
+        )
+        .unwrap();
+    }
+
+    // RESERVED 락을 잡아 VACUUM만 실패시킨다. 읽기는 통과하므로 열기는 진행된다.
+    let blocker = rusqlite::Connection::open(&path).unwrap();
+    blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+    let (db, db_path, crypto, cache) = open_states();
+    open_project_impl(path.to_str().unwrap(), &db, &db_path, &crypto, &cache).unwrap();
+
+    let guard = db.0.lock().unwrap();
+    assert!(
+        crate::commands::crypto::is_purge_pending(guard.as_ref().unwrap()).unwrap(),
+        "정리에 실패했으면 표시가 남아 다음에 다시 시도되어야 한다"
+    );
+
+    drop(guard);
+    drop(db);
+    blocker.execute_batch("ROLLBACK").unwrap();
+    drop(blocker);
+    std::fs::remove_dir_all(&dir).ok();
+}

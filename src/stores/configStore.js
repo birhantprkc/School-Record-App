@@ -39,6 +39,9 @@ export const useConfigStore = defineStore('config', () => {
     const recordCellFontSize = ref(DEFAULT_CELL_SIZE)
     const encryptionEnabled = ref(false)
     const encryptionUnlocked = ref(false)
+    // 암호화 직후 파일 정리(VACUUM)가 끝나지 않은 상태. 파일에 이전 데이터의
+    // 흔적이 남아 있을 수 있다는 뜻이라 설정 화면에서 경고와 재시도를 제공한다.
+    const purgePending = ref(false)
     const theme = ref('dark')
     const exportCSeparatorKey = ref(DEFAULT_SEPARATOR_KEY)
     const recordToolbar = reactive({ ...RECORD_TOOLBAR_DEFAULTS })
@@ -129,6 +132,17 @@ export const useConfigStore = defineStore('config', () => {
         const status = await invoke('get_encryption_status')
         encryptionEnabled.value = status.enabled
         encryptionUnlocked.value = status.unlocked
+        purgePending.value = status.purge_pending
+    }
+
+    // 열 때의 자동 재시도가 실패한 뒤, 원인을 해결하고 직접 누르는 재시도.
+    // 실패는 그대로 던져 화면이 알린다(무음 실패 금지).
+    async function retryEncryptionPurge() {
+        try {
+            await invoke('retry_encryption_purge')
+        } finally {
+            await refreshEncryptionStatus()
+        }
     }
 
     async function setRecordCellFontSize(size) {
@@ -194,6 +208,7 @@ export const useConfigStore = defineStore('config', () => {
         recordCellFontSize,
         encryptionEnabled,
         encryptionUnlocked,
+        purgePending,
         theme,
         exportCSeparatorKey,
         exportCSeparator,
@@ -210,5 +225,6 @@ export const useConfigStore = defineStore('config', () => {
         enableEncryption,
         disableEncryption,
         changeEncryptionPassword,
+        retryEncryptionPurge,
     }
 })

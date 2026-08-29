@@ -85,6 +85,7 @@ fn main() {
             enable_encryption,
             disable_encryption,
             change_encryption_password,
+            retry_encryption_purge,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

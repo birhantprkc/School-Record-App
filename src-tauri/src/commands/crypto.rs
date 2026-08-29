@@ -15,11 +15,29 @@ const VERIFY_PLAINTEXT: &str = "school-record-verify";
 const KEY_ENCRYPTION_ENABLED: &str = "encryption_enabled";
 const KEY_PBKDF2_SALT: &str = "encryption_pbkdf2_salt";
 const KEY_VERIFY_TOKEN: &str = "encryption_verify_token";
+/// 커밋은 끝났지만 정리(VACUUM)를 아직 못 끝냈다는 표시.
+///
+/// 값은 무엇을 하다 남았는지 나타내는 라벨("암호화" / "비밀번호 변경")이고,
+/// 다시 시도할 때 그대로 오류 메시지에 쓰인다. `encryption_` 접두사이므로
+/// 프론트엔드가 get_config/set_config로 건드릴 수 없다(config.rs 참고).
+const KEY_PURGE_PENDING: &str = "encryption_purge_pending";
+
+/// 새로 설정하는 비밀번호의 최소 길이.
+///
+/// 글자 수(char) 기준이다. UTF-8 바이트로 세면 한글 두 글자가 6바이트라 통과해,
+/// 같은 규칙이 언어마다 다르게 적용된다.
+const MIN_PASSWORD_LEN: usize = 4;
 
 #[derive(serde::Serialize)]
 pub struct EncryptionStatus {
     pub enabled: bool,
     pub unlocked: bool,
+    /// 암호화 직후 파일 정리(VACUUM)가 끝나지 않은 상태.
+    ///
+    /// 파일 안에 이전 데이터의 흔적이 남아 있을 수 있다는 뜻이므로 화면에 알린다.
+    /// 파일을 열 때 자동으로 다시 시도하지만, 그 시도까지 실패하면 이 값이 계속
+    /// true로 남아 설정 화면에 경고와 재시도 버튼이 표시된다.
+    pub purge_pending: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -106,6 +124,20 @@ pub(crate) fn decrypt_all_data(conn: &Connection, key: [u8; 32]) -> Result<(), S
     transform_all_data(conn, key, DataTransform::Decrypt)
 }
 
+/// 새로 설정하는 비밀번호만 검사한다.
+///
+/// **잠금 해제(unlock)에는 절대 적용하지 않는다.** 이 하한이 생기기 전에 3자 이하로
+/// 암호화한 파일이 이미 사용자 PC에 있을 수 있고, 여기서 막으면 올바른 비밀번호를
+/// 알고 있는데도 자기 파일을 영영 열 수 없게 된다.
+fn validate_new_password(password: &str) -> Result<(), String> {
+    if password.chars().count() < MIN_PASSWORD_LEN {
+        return Err(format!(
+            "비밀번호는 최소 {MIN_PASSWORD_LEN}자 이상이어야 합니다."
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn is_encryption_enabled(conn: &Connection) -> Result<bool, String> {
     Ok(get_config_impl(conn, KEY_ENCRYPTION_ENABLED)?.as_deref() == Some("true"))
 }
@@ -155,7 +187,11 @@ pub(crate) fn get_encryption_status_impl(
 ) -> Result<EncryptionStatus, String> {
     let enabled = is_encryption_enabled(conn)?;
     let unlocked = enabled && current_crypto_key(crypto)?.is_some();
-    Ok(EncryptionStatus { enabled, unlocked })
+    Ok(EncryptionStatus {
+        enabled,
+        unlocked,
+        purge_pending: is_purge_pending(conn)?,
+    })
 }
 
 pub(crate) fn unlock_encryption_impl(
@@ -183,7 +219,7 @@ pub(crate) fn unlock_encryption_impl(
 /// 거치지 않아 다른 쓰기와 겹치면 반쯤 커밋된 페이지를 담은 파일이 나올 수 있었다.
 ///
 /// **호출부는 반드시 트랜잭션 밖이어야 한다** — VACUUM은 트랜잭션 안에서 실행되지
-/// 않는다. enable/disable/change 세 경로 모두 with_transaction 이전에 호출한다.
+/// 않는다. enable/disable/change 세 경로 모두 트랜잭션을 열기 전에 호출한다.
 /// DbState 락은 커맨드 래퍼가 이미 잡고 있으므로(conn을 넘겨받는다) 여기서는
 /// DbPathState만 잡아 DbState → DbPathState 순서를 유지한다.
 fn backup_db_file(
@@ -240,6 +276,69 @@ pub(crate) fn purge_free_pages(conn: &Connection, what: &str) -> Result<(), Stri
     })
 }
 
+/// 데이터 변경과 정리 표시를 **한 커밋으로 묶는다.**
+///
+/// 표시가 같은 커밋에 들어가야 커밋 직후 프로세스가 죽어도 표시가 파일에 남아,
+/// 다음에 열 때 이어받을 수 있다. 표시를 트랜잭션 밖에서 남기면 커밋과 표시
+/// 사이에 죽었을 때 잔재만 남고 표시는 없어, 다시 시도할 근거가 사라진다.
+///
+/// 그 창은 테스트로 잡을 수 없다 — 두 문장 사이에서 프로세스를 죽여야 보이기
+/// 때문이다. 그래서 표시를 이 함수 안에 가둔다. 호출부는 표시를 남길지 고를 수
+/// 없으므로, 실수로 트랜잭션 밖으로 옮기는 회귀 자체가 생기지 않는다.
+pub(crate) fn with_purge_marked_transaction(
+    conn: &Connection,
+    what: &str,
+    action: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    with_transaction(conn, || {
+        action()?;
+        set_config_impl(conn, KEY_PURGE_PENDING, what)
+    })
+}
+
+/// 정리가 밀려 있는지 확인한다. 화면에 알리기 위한 조회다.
+pub(crate) fn is_purge_pending(conn: &Connection) -> Result<bool, String> {
+    Ok(get_config_impl(conn, KEY_PURGE_PENDING)?.is_some())
+}
+
+/// VACUUM을 실행하고, **성공했을 때만** 표시를 지운다.
+///
+/// 순서를 뒤집어 표시를 먼저 지우면 VACUUM이 실패했을 때 재시도할 근거가 사라진다.
+/// 실패하면 표시가 그대로 남아 다음에 파일을 열 때 이어서 시도된다.
+fn purge_and_clear_pending(conn: &Connection, what: &str) -> Result<(), String> {
+    purge_free_pages(conn, what)?;
+    conn.execute(
+        "DELETE FROM APP_CONFIGS WHERE config_key = ?1",
+        rusqlite::params![KEY_PURGE_PENDING],
+    )
+    .map_err(|e| format!("{what} 정리는 끝났지만 완료 표시를 지우지 못했습니다: {e}"))?;
+    Ok(())
+}
+
+/// 지난번에 끝내지 못한 정리를 이어서 실행한다. 표시가 없으면 아무것도 하지 않는다.
+///
+/// 암호화를 켜거나 비밀번호를 바꾸면 옛 평문·옛 암호문이 freelist에 남고, 그것을
+/// 지우는 VACUUM은 커밋 **이후**에 실행된다. 그 사이에 프로세스가 죽으면 잔재가
+/// 파일에 남은 채 끝나고, 예전에는 앱 안에 다시 시도할 방법이 없었다.
+/// 표시는 커밋에 포함돼 있으므로 여기서 이어받는다.
+pub(crate) fn resume_pending_purge(conn: &Connection) -> Result<(), String> {
+    let Some(what) = get_config_impl(conn, KEY_PURGE_PENDING)? else {
+        return Ok(());
+    };
+    purge_and_clear_pending(conn, &what)
+}
+
+/// 사용자가 설정 화면에서 직접 누르는 재시도.
+///
+/// 열 때의 자동 재시도가 실패한 뒤(디스크 공간 부족 등) 원인을 해결했을 때,
+/// 파일을 닫았다 다시 열지 않고도 정리할 수 있게 한다.
+pub(crate) fn retry_pending_purge_impl(conn: &Connection) -> Result<(), String> {
+    if !is_purge_pending(conn)? {
+        return Err("정리할 항목이 없습니다.".to_string());
+    }
+    resume_pending_purge(conn)
+}
+
 /// 작업이 성공한 뒤 백업을 지운다.
 ///
 /// 삭제 실패를 조용히 넘기면 사용자는 백업이 사라진 줄 알지만 실제로는 남아 있게
@@ -259,9 +358,7 @@ pub(crate) fn enable_encryption_impl(
     db_path_state: &DbPathState,
     password: &str,
 ) -> Result<(), String> {
-    if password.is_empty() {
-        return Err("비밀번호를 입력해주세요.".to_string());
-    }
+    validate_new_password(password)?;
     if is_encryption_enabled(conn)? {
         return Err("이미 암호화가 활성화되어 있습니다.".to_string());
     }
@@ -275,19 +372,18 @@ pub(crate) fn enable_encryption_impl(
     let salt_b64 = B64.encode(salt);
     let verify_token = encrypt(VERIFY_PLAINTEXT, &key)?;
 
-    with_transaction(conn, || {
+    with_purge_marked_transaction(conn, "암호화", || {
         encrypt_all_data(conn, key)?;
         set_config_impl(conn, KEY_PBKDF2_SALT, &salt_b64)?;
         set_config_impl(conn, KEY_VERIFY_TOKEN, &verify_token)?;
-        set_config_impl(conn, KEY_ENCRYPTION_ENABLED, "true")?;
-        Ok(())
+        set_config_impl(conn, KEY_ENCRYPTION_ENABLED, "true")
     })
     .map_err(|e| format!("{e}\n복구용 평문 백업이 남아 있습니다: {}", backup.display()))?;
 
     combine_all([
         set_crypto_state(crypto, key),
         remove_backup_after_success(&backup, "암호화"),
-        purge_free_pages(conn, "암호화"),
+        purge_and_clear_pending(conn, "암호화"),
     ])
 }
 
@@ -304,6 +400,9 @@ pub(crate) fn disable_encryption_impl(
 
     with_transaction(conn, || {
         decrypt_all_data(conn, key)?;
+        // KEY_PURGE_PENDING은 일부러 지우지 않는다. 암호화를 켜다 만 상태에서
+        // 해제한 경우 파일에는 아직 정리하지 못한 잔재가 있을 수 있고, 표시를
+        // 남겨두면 다음에 열 때 정리된다. 남겨서 손해 보는 것은 VACUUM 한 번뿐이다.
         conn.execute(
             "DELETE FROM APP_CONFIGS WHERE config_key IN (?1, ?2, ?3)",
             rusqlite::params![KEY_ENCRYPTION_ENABLED, KEY_PBKDF2_SALT, KEY_VERIFY_TOKEN],
@@ -322,9 +421,7 @@ pub(crate) fn change_encryption_password_impl(
     old_password: &str,
     new_password: &str,
 ) -> Result<(), String> {
-    if new_password.is_empty() {
-        return Err("새 비밀번호를 입력해주세요.".to_string());
-    }
+    validate_new_password(new_password)?;
     let (salt, verify_token) = encryption_material(conn)?;
     let old_key = verify_password(
         old_password,
@@ -342,12 +439,11 @@ pub(crate) fn change_encryption_password_impl(
     let new_salt_b64 = B64.encode(new_salt);
     let new_verify_token = encrypt(VERIFY_PLAINTEXT, &new_key)?;
 
-    with_transaction(conn, || {
+    with_purge_marked_transaction(conn, "비밀번호 변경", || {
         decrypt_all_data(conn, old_key)?;
         encrypt_all_data(conn, new_key)?;
         set_config_impl(conn, KEY_PBKDF2_SALT, &new_salt_b64)?;
-        set_config_impl(conn, KEY_VERIFY_TOKEN, &new_verify_token)?;
-        Ok(())
+        set_config_impl(conn, KEY_VERIFY_TOKEN, &new_verify_token)
     })
     .map_err(|e| format!("{e}\n복구용 백업이 남아 있습니다: {}", backup.display()))?;
 
@@ -356,7 +452,7 @@ pub(crate) fn change_encryption_password_impl(
     combine_all([
         set_crypto_state(crypto, new_key),
         remove_backup_after_success(&backup, "비밀번호 변경"),
-        purge_free_pages(conn, "비밀번호 변경"),
+        purge_and_clear_pending(conn, "비밀번호 변경"),
     ])
 }
 
@@ -406,6 +502,13 @@ pub fn disable_encryption(
 ) -> Result<(), String> {
     let guard = db.0.lock().map_err(|e| e.to_string())?;
     disable_encryption_impl(db_conn(&guard)?, &crypto, &db_path)
+}
+
+/// 정리를 지금 다시 시도한다. 설정 화면의 "지금 정리" 버튼이 호출한다.
+#[tauri::command]
+pub fn retry_encryption_purge(db: State<DbState>) -> Result<(), String> {
+    let guard = db.0.lock().map_err(|e| e.to_string())?;
+    retry_pending_purge_impl(db_conn(&guard)?)
 }
 
 #[tauri::command]
