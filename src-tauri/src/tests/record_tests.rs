@@ -655,3 +655,73 @@ fn test_save_snapshot_without_note_stores_null() {
         .unwrap();
     assert!(note.is_none(), "메모 없이 저장하면 note는 NULL이어야 한다");
 }
+
+// ── 가져오기 전 원본 보존 (감사 F4) ───────────────────────────
+//
+// apply_replace·bulk_quick_replace는 덮어쓰기 전 원본을 히스토리에 남기는데
+// 가져오기만 빠져 있었다. 셀 편집은 히스토리를 만들지 않는 설계이므로,
+// 손으로 고친 뒤 재가져오기를 하면 복구 수단 없이 사라졌다.
+
+#[test]
+fn test_bulk_import_preserves_overwritten_content_in_history() {
+    let conn = setup_test_db();
+    let act_id = insert_activity(&conn, "발표");
+    let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
+
+    // 선생님이 손으로 쓴 내용 (셀 편집은 히스토리를 만들지 않는다)
+    upsert_record_impl(&conn, act_id, stu_id, "손으로 고친 내용", None).unwrap();
+
+    // 엑셀에서 다시 가져오기 → 덮어씀
+    bulk_import_records_impl(
+        &conn,
+        &[make_import(1, 1, 1, Some("홍길동"), act_id, "엑셀에서 가져온 내용")],
+        None,
+    )
+    .unwrap();
+
+    // 현재 내용은 가져온 것
+    let current: String = conn
+        .query_row(
+            "SELECT content FROM ActivityRecord WHERE activity_id=?1 AND student_id=?2",
+            rusqlite::params![act_id, stu_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(current, "엑셀에서 가져온 내용");
+
+    // 덮어쓰인 내용이 히스토리에 남아 되돌릴 수 있어야 한다
+    let preserved: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM ActivityRecordHistory WHERE content = '손으로 고친 내용'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        preserved, 1,
+        "덮어쓰기 전 내용이 히스토리에 없으면 되돌릴 방법이 없다"
+    );
+}
+
+#[test]
+fn test_bulk_import_new_record_creates_no_pre_image() {
+    let conn = setup_test_db();
+    let act_id = insert_activity(&conn, "발표");
+
+    // 기존 기록이 없으면 남길 원본도 없다 — 빈 히스토리가 생기면 안 된다.
+    bulk_import_records_impl(
+        &conn,
+        &[make_import(1, 1, 1, Some("신규"), act_id, "처음 가져온 내용")],
+        None,
+    )
+    .unwrap();
+
+    let empty_rows: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM ActivityRecordHistory WHERE note = '가져오기 전'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(empty_rows, 0, "새 기록에는 보존할 원본이 없다");
+}

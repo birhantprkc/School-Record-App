@@ -377,6 +377,13 @@ pub fn bulk_import_records_impl(
             .ok_or_else(|| "캐시 오류".to_string())?;
         let stored_content = maybe_encrypt(&r.content, key)?;
 
+        // 덮어쓰기 **전에** 기존 내용을 히스토리에 남긴다.
+        // apply_replace·bulk_quick_replace는 이미 그렇게 하는데 가져오기만 빠져 있었다.
+        // 셀 편집은 히스토리를 만들지 않는 설계(CLAUDE.md)이므로, 손으로 고친 뒤
+        // 재가져오기를 하면 그 내용이 복구 수단 없이 사라졌다.
+        // 해당 기록이 아직 없으면 남길 것도 없으므로 no-op이 된다.
+        save_snapshot_internal(conn, r.activity_id, student_id, Some("가져오기 전"))?;
+
         conn.execute(
             "INSERT INTO ActivityRecord (activity_id, student_id, content, updated_at)
              VALUES (?1, ?2, ?3, datetime('now'))
