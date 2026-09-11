@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    학교생활기록부 에디터 앱 아이콘 · 단일 원본
+
+    이 파일 하나가 원본이다. 쓰이는 곳:
+      · 홈 화면 로고   src/views/HomeView.vue  (img src="/app-icon.svg")
+      · 파비콘         index.html
+      · 플랫폼 아이콘  src-tauri/icons/*
+
+    플랫폼 아이콘 재생성: 이 파일을 1024px PNG로 구운 뒤 `npx tauri icon <png>`.
+    굽는 방법은 헤드리스 브라우저 스크린샷이면 무엇이든 되고, 배경은 투명이어야
+    모서리 라운드가 살아난다. tauri icon은 android/ios 폴더도 만드는데
+    이 앱은 데스크톱 전용이라 지운다.
+
+    구성: 타일(160도 그라데) 위에 흰 장부를 얹고, 책갈피 리본과 학생을 도려내
+          타일이 비치게 한다. 가방끈만 다시 흰색으로 어깨를 가로지른다.
+    배율: 24 그리드를 타일 대비 80% (819.2px, 사방 여백 102.4px)
+  -->
+  <defs>
+    <linearGradient id="tile" gradientUnits="userSpaceOnUse" x1="337" y1="31" x2="687" y2="993">
+      <stop offset="0" stop-color="#4c6ef5"/>
+      <stop offset="1" stop-color="#2a3f9e"/>
+    </linearGradient>
+    <mask id="glyph">
+      <g transform="translate(102.4 102.4) scale(34.133333)">
+        <rect x="2.8" y="1.4" width="18.4" height="21.2" rx="1.6" fill="#fff"/>
+        <path d="M15 1.4h4v7.6l-2-1.7-2 1.7z" fill="#000"/>
+        <circle cx="11.2" cy="11.8" r="2.8" fill="#000"/>
+        <path d="M5.6 21a5.6 5.6 0 0 1 11.2 0z" fill="#000"/>
+        <path d="M8 16.6 15 20.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="1024" height="1024" rx="225" fill="url(#tile)"/>
+  <rect width="1024" height="1024" fill="#ffffff" mask="url(#glyph)"/>
+</svg>

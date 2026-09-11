@@ -142,11 +142,7 @@ function closeUpdateModal() {
         <!-- 로고 -->
         <div class="logo-wrap">
           <div class="logo-icon">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
-                 stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            <img class="logo-glyph" src="/app-icon.svg" alt="">
             <span class="logo-badge"/>
           </div>
           <div class="logo-text">
@@ -376,12 +372,18 @@ function closeUpdateModal() {
   position: relative;
   width: 68px;
   height: 68px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #3b5bdb, #4c6ef5);
+  /* 라운드는 app-icon.svg의 22%와 맞춘다 — 여기선 box-shadow 모양만 따라간다 */
+  border-radius: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 8px 32px rgba(59, 91, 219, 0.35);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 8px 32px rgba(76, 110, 245, 0.35);
+}
+
+.logo-glyph {
+  display: block;
+  width: 68px;
+  height: 68px;
 }
 
 .logo-badge {
