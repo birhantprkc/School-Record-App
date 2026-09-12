@@ -754,3 +754,117 @@ fn test_backup_is_refused_before_migration() {
 
     let _ = std::fs::remove_dir_all(dir);
 }
+
+// ── 암호화를 쓰지 않던 파일의 생애 ───────────────────────────
+//
+// 배포된 파일의 다수가 이 경로다. v1 평문 → v2 → (나중에) 암호화 켜기.
+// 마이그레이션 자체는 버전만 올리므로 조용히 지나가지만, **그 뒤에 암호화를 켜는
+// 시점에야** note/memo가 처음으로 암호화된다. 그 지점이 깨지면 사용자는 암호화를
+// 켠 줄 알지만 메모만 평문으로 남는다.
+
+#[test]
+fn test_plaintext_v1_migrates_then_encrypts_when_enabled_later() {
+    let conn = setup_test_db();
+    conn.pragma_update(None, "user_version", 1u32).unwrap();
+    let (path_state, dir) = setup_temp_db_path_state();
+    let (act, stu) = seed_plaintext(&conn);
+
+    let mut conn = conn;
+    migrate_schema_impl(&mut conn, &crypto_state(None)).unwrap();
+    let conn = conn;
+
+    // 1) 마이그레이션은 버전만 올린다. 암호화를 안 쓰니 바꿀 것이 없다.
+    assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
+    let notes_after_migrate = raw_col(&conn, "ActivityRecordHistory", "note");
+    assert!(
+        notes_after_migrate.iter().any(|(_, v)| v.as_deref() == Some("첫 메모")),
+        "암호화를 쓰지 않는 파일의 메모는 평문 그대로여야 한다"
+    );
+
+    // 2) 사용자가 이제 암호화를 켠다. 이때 note/memo도 함께 암호화되어야 한다.
+    let crypto = crypto_state(None);
+    enable_encryption_impl(&conn, &crypto, &path_state, "password").unwrap();
+    let key = resolve_data_key(&conn, &crypto).unwrap();
+
+    for (table, column, plain) in [
+        ("ActivityRecordHistory", "note", "첫 메모"),
+        ("Snapshot", "memo", "스냅샷 메모"),
+    ] {
+        let stored: Vec<String> = raw_col(&conn, table, column)
+            .into_iter()
+            .filter_map(|(_, v)| v)
+            .collect();
+        assert!(
+            !stored.iter().any(|v| v == plain),
+            "{table}.{column}이 평문으로 남아 있다"
+        );
+        assert!(
+            stored.iter().any(|v| decrypt(v, &key.unwrap()).ok().as_deref() == Some(plain)),
+            "{table}.{column}이 이 키로 복호화되지 않는다"
+        );
+    }
+
+    // 3) 읽기 경로는 평문을 돌려준다.
+    assert!(plain_notes(&conn, act, stu, key).iter().any(|n| n == "첫 메모"));
+    let snaps = get_snapshots_impl(&conn, key).unwrap();
+    assert!(snaps.iter().any(|s| s.memo.as_deref() == Some("스냅샷 메모")));
+
+    // 4) 켠 뒤에 새로 쓰는 메모도 암호문이라 암호화 해제가 막히지 않는다.
+    save_snapshot_internal(&conn, act, stu, Some("켠 뒤 메모"), key).unwrap();
+    create_snapshot_impl(&conn, Some("켠 뒤 스냅샷".to_string()), key).unwrap();
+    disable_encryption_impl(&conn, &crypto, &path_state).unwrap();
+
+    let notes: Vec<String> = raw_col(&conn, "ActivityRecordHistory", "note")
+        .into_iter()
+        .filter_map(|(_, v)| v)
+        .collect();
+    assert!(notes.contains(&"첫 메모".to_string()));
+    assert!(notes.contains(&"켠 뒤 메모".to_string()));
+    let memos: Vec<String> = raw_col(&conn, "Snapshot", "memo")
+        .into_iter()
+        .filter_map(|(_, v)| v)
+        .collect();
+    assert!(memos.contains(&"스냅샷 메모".to_string()));
+    assert!(memos.contains(&"켠 뒤 스냅샷".to_string()));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_enabling_encryption_after_migration_leaves_no_plaintext_in_the_file() {
+    // 위 경로의 파일 버전. 암호화를 켤 때 옛 페이지에 남는 평문 메모가 실제로
+    // 지워지는지는 파일 바이트로만 확인할 수 있다.
+    let (path_state, dir) = setup_temp_db_path_state();
+    const MARKER: &str = "평문마커_나중에암호화";
+    let db_path = dir.join("test.db");
+    let conn = Connection::open(&db_path).unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+    conn.execute_batch(include_str!("../schema.sql")).unwrap();
+    conn.pragma_update(None, "user_version", 1u32).unwrap();
+
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+    let act = insert_activity(&conn, "학급회의");
+    insert_record(&conn, act, stu, "학급 회의를 주도함");
+    save_snapshot_internal(&conn, act, stu, Some(MARKER), None).unwrap();
+    for i in 0..200 {
+        create_snapshot_impl(&conn, Some(format!("{MARKER}{i}")), None).unwrap();
+    }
+
+    let mut conn = conn;
+    migrate_schema_impl(&mut conn, &crypto_state(None)).unwrap();
+    let conn = conn;
+    assert!(
+        file_contains(&db_path, MARKER),
+        "아직 암호화 전이므로 평문이 있어야 한다 (테스트 전제)"
+    );
+
+    let crypto = crypto_state(None);
+    enable_encryption_impl(&conn, &crypto, &path_state, "password").unwrap();
+    drop(conn);
+
+    assert!(
+        !file_contains(&db_path, MARKER),
+        "암호화를 켠 뒤에도 파일 안에 평문 메모가 남아 있다"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
