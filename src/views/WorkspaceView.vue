@@ -17,8 +17,8 @@ import ChecklistSection from '../sections/ChecklistSection.vue'
 import ReplaceSection from '../sections/ReplaceSection.vue'
 import InspectSection from '../sections/InspectSection.vue'
 import SnapshotModal from '../components/SnapshotModal.vue'
-import UpdateModal from '../components/UpdateModal.vue'
 import SettingsSection from '../sections/SettingsSection.vue'
+import UpdateSection from '../sections/UpdateSection.vue'
 
 const project = useProjectStore()
 const config = useConfigStore()
@@ -27,7 +27,6 @@ const collapsed = ref(false)
 const activeSection = ref('overview')
 const sectionKey = ref(0)
 const showSnapshotModal = ref(false)
-const showUpdateModal = ref(false)
 
 const sectionMap = {
   overview: OverviewSection,
@@ -41,6 +40,7 @@ const sectionMap = {
   replace: ReplaceSection,
   inspect: InspectSection,
   settings: SettingsSection,
+  update: UpdateSection,
 }
 
 const currentSection = computed(() => sectionMap[activeSection.value])
@@ -52,7 +52,8 @@ onMounted(async () => {
     await win.setMinSize(new LogicalSize(900, 600))
     // 1280은 툴바가 한 줄에 안 들어간다. 실측: 툴바에 필요한 폭이 1074px,
     // 사이드바(240px)를 더하면 1314px이라 1280에서는 34px이 모자라 두 줄이 됐다.
-    // 1360으로 두면 46px 여유가 생기고, 학교에 흔한 1366×768 화면에도 들어간다.
+    // 1360으로 두면 46px 여유가 생긴다. 논리 픽셀이므로 배율 100%의 1366×768까지
+    // 들어가고, 그 위(125% 등)에서는 1280도 이미 넘쳤다 — 이 값이 만든 제약이 아니다.
     await win.setSize(new LogicalSize(1360, 720))
     await win.center()
   } catch {
@@ -76,7 +77,6 @@ onMounted(async () => {
         :file-path="project.filePath"
         @select="activeSection = $event"
         @openSnapshot="showSnapshotModal = true"
-        @openUpdate="showUpdateModal = true"
     />
     <main class="flex-1 overflow-y-auto bg-surface flex flex-col">
       <!-- 화면을 떠나는 순간 저장에 실패한 경우. 그 배너를 띄우던 컴포넌트는 이미
@@ -106,7 +106,6 @@ onMounted(async () => {
       </div>
       <component :is="currentSection" :key="sectionKey" @navigate="activeSection = $event"/>
     </main>
-    <UpdateModal v-if="showUpdateModal" @close="showUpdateModal = false"/>
     <SnapshotModal
         v-if="showSnapshotModal"
         @close="showSnapshotModal = false"

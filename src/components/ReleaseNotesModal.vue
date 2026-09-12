@@ -1,5 +1,6 @@
 <script setup>
-import { Sparkles, Wrench, Bug, AlertTriangle } from 'lucide-vue-next'
+import { Sparkles } from 'lucide-vue-next'
+import ReleaseNoteList from './ReleaseNoteList.vue'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 
 defineProps({
@@ -25,55 +26,8 @@ useEscapeKey(() => emit('close'))
         </div>
       </div>
 
-      <div v-if="notes.length" class="notes-body flex flex-col gap-4 mb-6 max-h-[40vh] overflow-y-auto pr-1">
-        <template v-for="(note, index) in notes" :key="note.version">
-          <div class="text-lg font-semibold text-ink-3 pb-0.5">
-            v{{ note.version }}
-            <span class="text-base font-normal text-ink-5 ml-[6px]">{{ note.date }}</span>
-          </div>
-
-          <div v-if="note.breaking?.length" class="flex flex-col gap-2">
-            <div class="flex items-center gap-[6px] text-lg font-semibold uppercase tracking-[0.05em] text-ink-3">
-              <AlertTriangle :size="14" class="shrink-0 text-amber" />
-              주요 변경 사항
-            </div>
-            <ul class="list-disc list-outside pl-[18px] flex flex-col gap-[5px] m-0">
-              <li v-for="item in note.breaking" :key="item" class="text-base text-ink-2 leading-[1.5]">{{ item }}</li>
-            </ul>
-          </div>
-
-          <div v-if="note.features?.length" class="flex flex-col gap-2">
-            <div class="flex items-center gap-[6px] text-lg font-semibold uppercase tracking-[0.05em] text-ink-3">
-              <Sparkles :size="14" class="shrink-0 text-blue-2" />
-              새 기능
-            </div>
-            <ul class="list-disc list-outside pl-[18px] flex flex-col gap-[5px] m-0">
-              <li v-for="item in note.features" :key="item" class="text-base text-ink-2 leading-[1.5]">{{ item }}</li>
-            </ul>
-          </div>
-
-          <div v-if="note.improvements?.length" class="flex flex-col gap-2">
-            <div class="flex items-center gap-[6px] text-lg font-semibold uppercase tracking-[0.05em] text-ink-3">
-              <Wrench :size="14" class="shrink-0 text-violet" />
-              개선 사항
-            </div>
-            <ul class="list-disc list-outside pl-[18px] flex flex-col gap-[5px] m-0">
-              <li v-for="item in note.improvements" :key="item" class="text-base text-ink-2 leading-[1.5]">{{ item }}</li>
-            </ul>
-          </div>
-
-          <div v-if="note.bugFixes?.length" class="flex flex-col gap-2">
-            <div class="flex items-center gap-[6px] text-lg font-semibold uppercase tracking-[0.05em] text-ink-3">
-              <Bug :size="14" class="shrink-0 text-green" />
-              버그 수정
-            </div>
-            <ul class="list-disc list-outside pl-[18px] flex flex-col gap-[5px] m-0">
-              <li v-for="item in note.bugFixes" :key="item" class="text-base text-ink-2 leading-[1.5]">{{ item }}</li>
-            </ul>
-          </div>
-
-          <hr v-if="index < notes.length - 1" class="border-0 border-t border-line-2 my-2 opacity-60" />
-        </template>
+      <div v-if="notes.length" class="notes-body mb-6 max-h-[40vh] overflow-y-auto pr-1">
+        <ReleaseNoteList :notes="notes"/>
       </div>
 
       <div v-else class="text-base text-ink-5 text-center py-5 mb-6">

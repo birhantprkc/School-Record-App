@@ -29,7 +29,7 @@ const props = defineProps({
   filePath: String,
 })
 
-const emit = defineEmits(['update:collapsed', 'select', 'openSnapshot', 'openUpdate'])
+const emit = defineEmits(['update:collapsed', 'select', 'openSnapshot'])
 
 const update = useUpdateStore()
 
@@ -183,9 +183,14 @@ const navGroups = [
         파일을 연 뒤에도 여기에 남는다.
       -->
       <button
-          class="relative flex items-center gap-2 w-full rounded-btn bg-transparent border-none font-medium cursor-pointer text-left whitespace-nowrap overflow-hidden transition-colors text-ink-3 hover:bg-line hover:text-ink-2"
-          :class="collapsed ? 'justify-center p-2' : 'py-2 px-2.5'"
-          @click="$emit('openUpdate')"
+          class="relative flex items-center gap-2 w-full rounded-btn bg-transparent border-none font-medium cursor-pointer text-left whitespace-nowrap overflow-hidden transition-colors"
+          :class="[
+            collapsed ? 'justify-center p-2' : 'py-2 px-2.5',
+            activeSection === 'update'
+              ? 'bg-blue/20 text-blue-2 hover:bg-blue/30 hover:text-ink-2'
+              : 'text-ink-3 hover:bg-line hover:text-ink-2'
+          ]"
+          @click="select('update')"
           title="업데이트 확인"
       >
         <RefreshCw :size="20" class="shrink-0"/>
