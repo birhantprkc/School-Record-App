@@ -23,6 +23,7 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
 const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
 const localError = ref('')
 
 const isSetupMode = computed(() => props.mode === 'setup')
@@ -185,12 +186,18 @@ function handleCancel() {
           <label class="text-base font-medium text-ink-3">{{ mode === 'setup' ? '비밀번호 확인' : '새 비밀번호 확인' }}</label>
           <div class="relative">
             <input
-                type="password"
+                :type="showConfirmPassword ? 'text' : 'password'"
                 v-model="confirmPassword"
                 :placeholder="mode === 'setup' ? '비밀번호 재입력' : '새 비밀번호 재입력'"
                 class="w-full py-2.5 pr-10 pl-3.5 bg-base border border-line-2 rounded-btn text-ink text-base outline-none transition-colors focus:border-blue-2 box-border placeholder:text-ink-5"
                 @keydown.enter="handleSubmit"
             />
+            <button type="button"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-ink-5 cursor-pointer p-1 flex items-center transition-colors hover:text-ink-3"
+                    @click="showConfirmPassword = !showConfirmPassword">
+              <Eye v-if="!showConfirmPassword" :size="16"/>
+              <EyeOff v-else :size="16"/>
+            </button>
           </div>
         </div>
 
