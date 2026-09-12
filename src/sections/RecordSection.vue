@@ -1,7 +1,7 @@
 ﻿<script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {getCurrentWindow} from '@tauri-apps/api/window'
-import {ALargeSmall, ArrowLeftRight, ArrowUpDown, Circle, CircleAlert, ChevronsRight, Eye, EyeOff, Maximize2, Minimize2, Moon, Pin, PinOff, Search, Sun} from 'lucide-vue-next'
+import {ALargeSmall, ArrowLeftRight, ArrowUpDown, Circle, CircleAlert, ChevronsRight, Eye, EyeOff, Maximize2, Minimize2, Moon, Pin, PinOff, Search, Sun} from '@lucide/vue'
 import {useAreaStore} from '../stores/area'
 import {useRecordStore} from '../stores/record'
 import {useConfigStore} from '../stores/configStore'

@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {computed, ref} from 'vue'
-import {AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X} from 'lucide-vue-next'
+import {AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X} from '@lucide/vue'
 import {useEscapeKey} from '../composables/useEscapeKey.js'
 import {Workbook} from 'exceljs'
 import * as XLSX from 'xlsx'

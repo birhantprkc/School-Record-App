@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {ref} from 'vue'
-import {AlertTriangle, Eraser, FileOutput, KeyRound, Moon, Shield, ShieldOff, Sun} from 'lucide-vue-next'
+import {AlertTriangle, Eraser, FileOutput, KeyRound, Moon, Shield, ShieldOff, Sun} from '@lucide/vue'
 import {useConfigStore} from '../stores/configStore'
 import PasswordModal from '../components/PasswordModal.vue'
 

@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
-import {BookOpen, Plus} from 'lucide-vue-next'
+import {BookOpen, Plus} from '@lucide/vue'
 import {useActivityStore} from '../stores/activity'
 import {useAreaStore} from '../stores/area'
 import ActivityCard from '../components/ActivityCard.vue'

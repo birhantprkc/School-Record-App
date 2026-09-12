@@ -16,7 +16,7 @@ import {
   Trash2,
   TriangleAlert,
   X,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import WizardLayout from '../components/WizardLayout.vue'
 
 const ruleStore = useReplaceRuleStore()

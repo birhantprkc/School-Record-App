@@ -1,7 +1,7 @@
 <script setup>
 import {ref} from 'vue'
 import {openUrl} from '@tauri-apps/plugin-opener'
-import {Copy, ExternalLink, Github, ShieldCheck} from 'lucide-vue-next'
+import {Code, Copy, ExternalLink, ShieldCheck} from '@lucide/vue'
 
 const HOMEPAGE = 'https://luminousky.com/teacher-utility-kit/neis-editor/'
 const REPOSITORY = 'https://github.com/itmir913/School-Record-App'
@@ -73,7 +73,7 @@ async function copyEmail() {
           class="flex items-center gap-2 py-2.5 px-3.5 rounded-btn border border-line bg-transparent text-base text-ink-3 cursor-pointer transition-colors hover:bg-line hover:text-ink"
           @click="open(REPOSITORY)"
       >
-        <Github :size="15"/>
+        <Code :size="15"/>
         GitHub
       </button>
       <button

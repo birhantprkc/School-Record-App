@@ -1,6 +1,6 @@
 ﻿<script setup>
 import { useSlots } from 'vue'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 
 defineProps({

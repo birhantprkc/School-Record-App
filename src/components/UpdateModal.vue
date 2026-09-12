@@ -1,5 +1,5 @@
 <script setup>
-import {X} from 'lucide-vue-next'
+import {X} from '@lucide/vue'
 import {RELEASE_NOTES} from '../data/releaseNotes'
 import {useEscapeKey} from '../composables/useEscapeKey.js'
 import {useUpdateStore} from '../stores/updateStore.js'

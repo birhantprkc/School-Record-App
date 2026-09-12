@@ -127,6 +127,14 @@
 
 - **`xlsx` high 2건**(Prototype Pollution·ReDoS) — npm 배포가 중단돼 수정 불가.
   SheetJS는 한셀 파일 폴백이라 제거도 못 한다. CDN 버전으로 옮기는 안이 열려 있다.
+- **`exceljs` → `uuid` moderate 2건 — 도달하지 않는다. `npm audit fix`를 따르지 말 것.**
+  권고문은 `uuid`의 **v3/v5/v6에 `buf` 인자를 넘길 때** 버퍼 경계를 검사하지 않는
+  문제다. exceljs는 `uuid.v4()`를 **인자 없이** 부르는 것이 전부이고(`lib/xlsx/xform/
+  sheet/cf-ext/cf-rule-ext-xform.js` 한 곳), 그 외에 uuid를 쓰지 않는다. 함수도 다르고
+  문제의 인자도 넘기지 않으므로 이 앱에서는 실행될 수 없는 경로다.
+  `npm audit`이 제시하는 수정은 **exceljs 4.4.0 → 3.4.0 다운그레이드**다. 닿지 않는
+  경고 때문에 메이저 버전을 되돌리는 셈이라 하지 않는다. uuid가 상위 버전으로 올라간
+  exceljs가 나오면 그때 따라간다.
 - **`glib` medium 1건**(`VariantStrIter` unsoundness) — tauri의 Linux GTK 백엔드 경유
   전이 의존성이라 Windows·macOS 빌드에는 컴파일조차 되지 않는다. 앱이 직접 쓰지도 않는다.
   tauri가 gtk 스택을 올려야 사라진다.

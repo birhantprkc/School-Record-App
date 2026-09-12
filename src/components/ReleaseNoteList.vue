@@ -1,5 +1,5 @@
 <script setup>
-import {AlertTriangle, Bug, Sparkles, Wrench} from 'lucide-vue-next'
+import {AlertTriangle, Bug, Sparkles, Wrench} from '@lucide/vue'
 
 // 릴리즈 노트 목록을 그리는 것만 한다. 어디에 담기는지(모달·섹션)는 호출부가 정한다.
 //

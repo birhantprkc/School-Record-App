@@ -1,7 +1,7 @@
 <script setup>
 import {onMounted, ref} from 'vue'
 import {useSnapshotStore} from '../stores/snapshot.js'
-import {GitBranch, Plus, RotateCcw, X} from 'lucide-vue-next'
+import {GitBranch, Plus, RotateCcw, X} from '@lucide/vue'
 import {useEscapeKey} from '../composables/useEscapeKey.js'
 
 const emit = defineEmits(['close', 'restored'])

@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {computed, onMounted, ref} from 'vue'
-import {Pencil, Plus, TableProperties, Users} from 'lucide-vue-next'
+import {Pencil, Plus, TableProperties, Users} from '@lucide/vue'
 import {useStudentStore} from '../stores/student'
 import StudentModal from '../components/StudentModal.vue'
 import StudentBulkImportModal from '../components/StudentBulkImportModal.vue'

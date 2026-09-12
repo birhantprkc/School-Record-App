@@ -1,6 +1,6 @@
 <script setup>
 import {ref, computed, watch} from 'vue'
-import {Lock, Eye, EyeOff, AlertTriangle} from 'lucide-vue-next'
+import {Lock, Eye, EyeOff, AlertTriangle} from '@lucide/vue'
 import {useEscapeKey} from '../composables/useEscapeKey.js'
 
 const props = defineProps({

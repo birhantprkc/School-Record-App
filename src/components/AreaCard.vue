@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {computed} from 'vue'
-import {Users} from 'lucide-vue-next'
+import {Users} from '@lucide/vue'
 
 const props = defineProps({
   area: {type: Object, required: true},

@@ -1,7 +1,7 @@
 ﻿<script setup>
 import { ref, watch } from 'vue'
 import { useRecordStore } from '../stores/record.js'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 import DiffView from './DiffView.vue'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 

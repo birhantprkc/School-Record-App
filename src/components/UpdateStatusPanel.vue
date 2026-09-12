@@ -1,7 +1,7 @@
 <script setup>
 import {onMounted, ref} from 'vue'
 import {openUrl} from '@tauri-apps/plugin-opener'
-import {AlertTriangle, Check, CircleAlert, Download} from 'lucide-vue-next'
+import {AlertTriangle, Check, CircleAlert, Download} from '@lucide/vue'
 import {useUpdateStore} from '../stores/updateStore.js'
 
 const update = useUpdateStore()

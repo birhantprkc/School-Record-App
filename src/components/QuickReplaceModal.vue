@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Search, ArrowRight } from 'lucide-vue-next'
+import { Search, ArrowRight } from '@lucide/vue'
 import BaseModal from './BaseModal.vue'
 import DiffView from './DiffView.vue'
 import { useRecordStore } from '../stores/record'

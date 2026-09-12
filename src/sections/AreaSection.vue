@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
-import {Layers, Plus} from 'lucide-vue-next'
+import {Layers, Plus} from '@lucide/vue'
 import {useAreaStore} from '../stores/area'
 import {useActivityStore} from '../stores/activity'
 import {useStudentStore} from '../stores/student'

@@ -13,7 +13,7 @@ import {
   ScanSearch,
   Trash2,
   X,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import {useSynonymStore} from '../stores/synonymStore'
 import {useAreaStore} from '../stores/area'
 import {useFileStore} from '../stores/file'

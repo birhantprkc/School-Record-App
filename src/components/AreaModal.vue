@@ -1,6 +1,6 @@
 <script setup>
 import {computed, ref, watch} from 'vue'
-import {AlertTriangle, Trash2} from 'lucide-vue-next'
+import {AlertTriangle, Trash2} from '@lucide/vue'
 import BaseModal from './BaseModal.vue'
 
 const props = defineProps({

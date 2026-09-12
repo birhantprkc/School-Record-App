@@ -1,5 +1,5 @@
 ﻿<script setup>
-import {BookOpen, ChevronRight, Layers, PenLine, Upload, Users} from 'lucide-vue-next'
+import {BookOpen, ChevronRight, Layers, PenLine, Upload, Users} from '@lucide/vue'
 
 const emit = defineEmits(['navigate'])
 

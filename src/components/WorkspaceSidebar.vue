@@ -19,7 +19,7 @@ import {
   Settings,
   Upload,
   Users,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import {WebviewWindow} from '@tauri-apps/api/webviewWindow'
 import {useUpdateStore} from '../stores/updateStore.js'
 

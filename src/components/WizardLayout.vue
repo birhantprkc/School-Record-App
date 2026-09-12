@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {ref, watch} from 'vue'
-import {ArrowLeft, ArrowRight} from 'lucide-vue-next'
+import {ArrowLeft, ArrowRight} from '@lucide/vue'
 
 const props = defineProps({
   stepCount:    {type: Number,  required: true},

@@ -1,6 +1,6 @@
 ﻿<script setup>
 import {computed, ref, watch} from 'vue'
-import {ChevronDown, ChevronRight, Download, FileSpreadsheet, Users} from 'lucide-vue-next'
+import {ChevronDown, ChevronRight, Download, FileSpreadsheet, Users} from '@lucide/vue'
 import {Workbook} from 'exceljs'
 import * as XLSX from 'xlsx'
 import {save} from '@tauri-apps/plugin-dialog'

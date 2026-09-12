@@ -1,5 +1,5 @@
 <script setup>
-import { Sparkles } from 'lucide-vue-next'
+import { Sparkles } from '@lucide/vue'
 import ReleaseNoteList from './ReleaseNoteList.vue'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 

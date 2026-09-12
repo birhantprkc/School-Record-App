@@ -52,7 +52,7 @@ updates:
       tauri-js:
         patterns:
           - '@tauri-apps/*'
-      # 나머지(diff, lucide-vue-next, pretendard 등).
+      # 나머지(diff, @lucide/vue, pretendard 등).
       # '*'는 먼저 매칭되는 그룹이 이기므로 반드시 마지막에 둔다.
       frontend:
         patterns:
