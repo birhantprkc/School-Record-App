@@ -16,12 +16,12 @@ use crate::commands::crypto::{
     change_encryption_password_impl, disable_encryption_impl, enable_encryption_impl,
     encrypt_columns_introduced_in, is_purge_pending, resolve_data_key,
 };
-use crate::commands::project::migrate_schema_impl;
+use crate::commands::project::{backup_project_impl, migrate_schema_impl};
 use crate::commands::record::{get_record_history_impl, save_snapshot_internal};
 use crate::commands::snapshot::{create_snapshot_impl, get_snapshots_impl};
 use crate::crypto::decrypt;
 use crate::db;
-use crate::state::{CryptoState, CryptoStateHandle, DbPathState};
+use crate::state::{CryptoState, CryptoStateHandle, DbPathState, DbState};
 use rusqlite::Connection;
 use std::sync::Mutex;
 
@@ -643,5 +643,48 @@ fn test_v0_file_without_app_configs_still_migrates() {
     migrate_schema_impl(&mut conn, &crypto_state(None), &path_state).unwrap();
 
     assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_open_backup_is_skipped_while_memos_are_plaintext() {
+    // 열 때마다 만드는 백업은 마이그레이션 **직전**에 돈다. 그 시점의 사본에는
+    // 평문 메모가 들어 있고, 그 백업은 앱이 지우지 않으므로 영구히 남는다.
+    // 그래서 이 경우에만 건너뛰고, migrate_schema_impl이 성공 시 지울 수 있는
+    // -pre-upgrade 백업을 대신 만든다. 건너뛰기가 빠지면 본 DB를 암호화해 놓고
+    // 비밀번호 없이 읽히는 사본을 그 옆에 남기게 된다.
+    let conn = setup_test_db();
+    let (path_state, dir) = setup_temp_db_path_state();
+    let crypto = crypto_state(None);
+    seed_plaintext(&conn);
+    make_v1_encrypted(&conn, &crypto, &path_state, "password");
+
+    let db_state = DbState(Mutex::new(Some(conn)));
+    backup_project_impl(&db_state, &path_state).unwrap();
+    assert!(
+        backup_files(&dir).is_empty(),
+        "변환 전 평문 사본이 남았다: {:?}",
+        backup_files(&dir)
+    );
+
+    {
+        let mut guard = db_state.0.lock().unwrap();
+        let conn = guard.as_mut().unwrap();
+        migrate_schema_impl(conn, &crypto, &path_state).unwrap();
+    }
+    assert!(
+        backup_files(&dir).is_empty(),
+        "변환에 성공했으면 -pre-upgrade 사본도 남지 않는다"
+    );
+
+    // v2가 된 뒤에는 평소대로 백업을 만든다. 건너뛰기가 그 상태에 눌러앉으면
+    // 사용자는 열 때마다 생기던 백업을 영영 잃는다.
+    backup_project_impl(&db_state, &path_state).unwrap();
+    assert_eq!(
+        backup_files(&dir).len(),
+        1,
+        "평소 열기에서는 백업을 만들어야 한다"
+    );
+
     let _ = std::fs::remove_dir_all(dir);
 }
