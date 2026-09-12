@@ -363,6 +363,34 @@ pub(crate) fn unlock_encryption_impl(
 /// 않는다. enable/disable/change 세 경로 모두 트랜잭션을 열기 전에 호출한다.
 /// DbState 락은 커맨드 래퍼가 이미 잡고 있으므로(conn을 넘겨받는다) 여기서는
 /// DbPathState만 잡아 DbState → DbPathState 순서를 유지한다.
+/// `VACUUM INTO`로 사본을 만든다. **완성 전 이름(.part)으로 쓰고 성공해야 옮긴다.**
+///
+/// 바로 최종 이름으로 쓰면, 도중에 프로세스가 죽었을 때 크기만 작을 뿐 이름도
+/// 확장자도 정상 백업과 똑같은 파일이 남는다. 앱은 백업을 스캔하지도 지우지도
+/// 않으므로(CLAUDE.md) 그 파일은 영원히 남고, 나중에 복구하려고 열면 핫저널
+/// 롤백으로 0바이트가 된다(`integrity_check`는 그래도 ok를 돌려준다).
+///
+/// 실패 시 지우는 것도 **자기가 만든 .part뿐**이다. 최종 이름을 지우면 같은 초에
+/// 다른 인스턴스가 만든 정상 백업을 지울 수 있다.
+pub(crate) fn vacuum_into_backup(conn: &Connection, dest: &Path) -> Result<(), String> {
+    let mut part = dest.as_os_str().to_os_string();
+    part.push(".part");
+    let part = PathBuf::from(part);
+    let part_str = part
+        .to_str()
+        .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
+
+    // 경로를 SQL에 직접 넣지 않고 바인딩한다 — 한글·역슬래시 이스케이프 문제를 피한다.
+    if let Err(e) = conn.execute("VACUUM INTO ?1", rusqlite::params![part_str]) {
+        std::fs::remove_file(&part).ok();
+        return Err(format!("백업 생성 실패: {e}"));
+    }
+    std::fs::rename(&part, dest).map_err(|e| {
+        std::fs::remove_file(&part).ok();
+        format!("백업 파일 이름을 바꾸지 못했습니다: {e}")
+    })
+}
+
 pub(crate) fn backup_db_file(
     conn: &Connection,
     db_path_state: &DbPathState,
@@ -371,16 +399,7 @@ pub(crate) fn backup_db_file(
     let guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = guard.as_ref().ok_or("열린 프로젝트가 없습니다.")?;
     let dest = crate::engine::unique_backup_path(src, suffix)?;
-    let dest_str = dest
-        .to_str()
-        .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
-    // 중간에 실패하면 만들다 만 파일이 남는다. 이 앱은 백업을 스캔하지도 지우지도
-    // 않으므로(의도된 설계), 남겨두면 나중에 수동 복구할 때 빈 파일을 정상 백업으로
-    // 착각할 수 있다. unique_backup_path가 없는 이름만 주므로 지워도 안전하다.
-    if let Err(e) = conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str]) {
-        std::fs::remove_file(&dest).ok();
-        return Err(format!("백업 생성 실패: {e}"));
-    }
+    vacuum_into_backup(conn, &dest)?;
     Ok(dest)
 }
 

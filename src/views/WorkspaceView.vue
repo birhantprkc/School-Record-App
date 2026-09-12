@@ -85,6 +85,19 @@ onMounted(async () => {
             @click="recordStore.pendingSaveError = ''"
         >닫기</button>
       </div>
+      <!-- 파일을 여는 도중 나온 경고. 홈 화면에서 띄우면 곧바로 이 화면으로
+           넘어가며 사라지므로 여기서 보여준다. 사용자가 닫을 때까지 남는다. -->
+      <div
+          v-for="(warning, i) in project.openWarnings"
+          :key="i"
+          class="px-6 py-2 border-b border-line-2 shrink-0 bg-amber/[0.08] flex items-center gap-3"
+      >
+        <p class="text-base text-amber m-0 flex-1">{{ warning }}</p>
+        <button
+            class="bg-transparent border-none p-0 text-base text-amber/70 cursor-pointer hover:text-amber hover:underline"
+            @click="project.openWarnings.splice(i, 1)"
+        >닫기</button>
+      </div>
       <component :is="currentSection" :key="sectionKey" @navigate="activeSection = $event"/>
     </main>
     <SnapshotModal

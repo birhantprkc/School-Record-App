@@ -262,42 +262,40 @@ fn test_locked_file_refuses_to_migrate() {
 }
 
 #[test]
-fn test_failure_after_version_bump_rolls_everything_back() {
-    // user_version 승격이 정말 트랜잭션에 포함되는지 본다.
+fn test_existing_orphan_rows_do_not_block_a_no_ddl_migration() {
+    // 커밋 전 `PRAGMA foreign_key_check`는 DDL을 실제로 실행한 단계에서만 돈다.
     //
-    // 트리거로 데이터 변환 자체를 실패시키면 pragma_update 이전에 멈추므로
-    // "롤백됐다"가 아니라 "애초에 쓰이지 않았다"만 확인된다. 그래서 훅은 성공시키고,
-    // pragma_update **이후**에 도는 foreign_key_check에서 걸리게 만든다.
+    // 그러지 않으면 이 검사가 마이그레이션이 만든 위반이 아니라 **원래 파일에 있던**
+    // 위반을 잡는다. SCHEMA_VERSION이 줄곧 1이라 db::migrate는 배포된 파일에서 한 번도
+    // 돈 적이 없었고, DDL이 없는 v1→v2에서 모든 사용자 파일이 이 검사를 난생처음
+    // 통과해야 했다. 고아 행이 하나라도 있으면 그 파일은 열 때마다 같은 지점에서
+    // 멈추고, 데이터는 멀쩡한데 앱 안에 탈출구가 없어진다.
+    //
+    // (커밋 후 실패 경로가 이것뿐이었으므로, "user_version 승격이 트랜잭션 안에
+    //  있다"는 것을 직접 겨냥하는 테스트는 더 이상 만들 수 없다. db.rs 주석 참고 —
+    //  그쪽은 구조로 막는다. 훅이 실패하는 경우는 아래 테스트가 지킨다.)
     let conn = setup_test_db();
     conn.pragma_update(None, "user_version", 1u32).unwrap();
     seed_plaintext(&conn);
-    let before_notes = raw_col(&conn, "ActivityRecordHistory", "note");
+
+    // 외부 도구로 FK를 끄고 편집한 파일을 흉내낸다.
+    conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+    conn.execute(
+        "INSERT INTO ActivityRecordHistory (activity_record_id, content, note)
+         VALUES (999999, '고아 행', '고아 메모')",
+        [],
+    )
+    .unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
 
     let mut conn = conn;
-    let err = db::migrate(&mut conn, 1, &|tx, _| {
-        // foreign_keys = OFF 상태라 부모 없는 행도 들어간다.
-        tx.execute(
-            "INSERT INTO ActivityRecordHistory (activity_record_id, content, note)
-             VALUES (999999, 'orphan', '고아 메모')",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(())
-    })
-    .unwrap_err();
+    migrate_schema_impl(&mut conn, &crypto_state(None)).unwrap();
 
-    assert!(err.contains("외래키"), "무결성 위반을 알려야 한다: {err}");
-    assert_eq!(user_version(&conn), 1, "user_version이 롤백되어야 한다");
-    assert_eq!(
-        raw_col(&conn, "ActivityRecordHistory", "note"),
-        before_notes,
-        "같은 트랜잭션의 데이터 변경도 함께 롤백되어야 한다"
-    );
-
+    assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
     let fk_on: i64 = conn
         .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(fk_on, 1, "실패해도 foreign_keys는 ON으로 복구되어야 한다");
+    assert_eq!(fk_on, 1, "끝난 뒤 foreign_keys는 ON으로 복구되어야 한다");
 }
 
 #[test]

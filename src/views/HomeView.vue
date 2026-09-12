@@ -70,14 +70,42 @@ async function handleOpen() {
 }
 
 async function showReleaseNotesOrNavigate() {
+  project.openWarnings = []
+
   // 백업은 반드시 마이그레이션 **뒤에** 한다.
   //
   // 앞에 두면 메모 암호화로 넘어가는 그 한 번의 열기에서, 사본에 평문 메모가 담긴
   // 채로 본 DB만 암호화된다. 앱은 백업을 지우지 않으므로 비밀번호 없이 읽히는
-  // 사본이 영구히 남는다. 마이그레이션은 단일 트랜잭션이라 실패해도 파일이
-  // 그대로이므로, 변환 전 사본이 막아줄 사고가 없다.
+  // 사본이 영구히 남는다. 마이그레이션 각 단계는 원자적이라 실패해도 그 단계의
+  // 변경이 남지 않으므로, 변환 전 사본이 막아줄 사고가 없다.
   await project.migrateSchema()
-  await project.backupProject()
+
+  // 변환 뒤에 파일 안의 옛 흔적이 정리됐는지 확인한다. 정리는 실패해도 열기를
+  // 막지 않지만(다음에 열 때 다시 시도한다), 실패한 동안 파일에는 암호화되기 전의
+  // 메모가 그대로 남아 있다. 알리지 않으면 사용자는 알 방법이 없다.
+  try {
+    await config.refreshEncryptionStatus()
+    if (config.purgePending) {
+      project.openWarnings.push(
+          '파일 정리가 끝나지 않아, 암호화되기 전의 내용이 파일 안에 남아 있을 수 있습니다. ' +
+          '설정 화면에서 "지금 정리"를 눌러 다시 시도하실 수 있습니다.'
+      )
+    }
+  } catch {
+    // 상태 조회 실패로 열기를 막지는 않는다. 설정 화면이 같은 값을 다시 읽는다.
+  }
+
+  // 백업 실패로 열기를 막으면 안 된다.
+  //
+  // 마이그레이션은 이미 끝났고 파일은 정상이다. 여기서 막으면, 디스크 여유가
+  // 빠듯해 사본을 못 뜨는 사용자는 파일이 이미 새 형식이라 **이전 버전으로도**
+  // 열 수 없게 되어 갇힌다. 백업은 없어도 파일을 쓰는 데 지장이 없다.
+  try {
+    await project.backupProject()
+  } catch (e) {
+    project.openWarnings.push(`이번에는 백업 파일을 만들지 못했습니다. ${e}`)
+  }
+
   const oldVersion = await project.checkAndUpdateVersion()
   if (oldVersion !== null) {
     releaseNotesToShow.value = getNotesToShow(oldVersion)

@@ -94,16 +94,7 @@ pub(crate) fn backup_project_impl(
     let path_guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = path_guard.as_ref().ok_or("DB path not set")?;
     let dest = crate::engine::unique_backup_path(src, "")?;
-    let dest_str = dest
-        .to_str()
-        .ok_or("백업 경로를 문자열로 변환하지 못했습니다.")?;
-
-    // 경로를 SQL에 직접 넣지 않고 바인딩한다 — 한글·역슬래시 이스케이프 문제를 피한다.
-    if let Err(e) = conn.execute("VACUUM INTO ?1", rusqlite::params![dest_str]) {
-        std::fs::remove_file(&dest).ok();
-        return Err(format!("백업 생성 실패: {e}"));
-    }
-    Ok(())
+    crate::commands::crypto::vacuum_into_backup(conn, &dest)
 }
 
 #[tauri::command]
@@ -135,15 +126,6 @@ pub fn backup_project(state: State<DbState>, db_path: State<DbPathState>) -> Res
     backup_project_impl(&state, &db_path)
 }
 
-/// 파일을 현재 스키마 버전까지 올린다.
-///
-/// 데이터 변환이 필요한 단계(v1→v2의 메모 암호화)가 있으므로 암호화 키를 받는다.
-/// 키는 **트랜잭션을 열기 전에** 확보한다. 암호화가 켜져 있는데 잠금 상태면 여기서
-/// 멈추고 버전을 올리지 않는다. 버전만 먼저 오르고 데이터가 옛 표현으로 남는 파일은
-/// 다음에 열릴 때 새 표현으로 읽히므로 복구가 안 된다.
-///
-/// 호출 시점에 키가 있는 것은 프론트엔드가 보장한다 — 파일을 열 때
-/// unlock → backup → migrate 순서이고, 비밀번호를 취소하면 파일을 닫는다.
 /// 암호화 설정을 담는 APP_CONFIGS가 있는가.
 ///
 /// 버전 도입 이전(v0) 파일에는 이 테이블이 아예 없을 수 있다. 그 시절에는 암호화
@@ -176,7 +158,9 @@ fn has_app_configs(conn: &Connection) -> Result<bool, String> {
 ///
 /// 변환 전 사본이 막아주는 사고는 "암호화 코드 자체의 버그로 잘못된 암호문이
 /// 커밋되는 것"뿐인데, 그건 **직전 열기의 백업**이 이미 커버한다. 전원이 나가거나
-/// 강제 종료되는 경우는 마이그레이션이 단일 트랜잭션이라 SQLite가 롤백한다.
+/// 강제 종료되는 경우는 마이그레이션의 **각 단계가 원자적**이라 그 단계의 변경이
+/// 남지 않는다. (버전 단계마다 커밋하므로 전체가 하나의 트랜잭션인 것은 아니다 —
+/// 여러 단계를 건너뛰는 파일은 중간 버전까지 적용된 채로 남을 수 있다.)
 /// 확정적인 평문 노출과 맞바꿀 이유가 없다.
 pub fn migrate_schema_impl(
     conn: &mut Connection,
@@ -213,9 +197,11 @@ pub fn migrate_schema_impl(
         } else {
             format!("파일은 v{now}까지 적용된 상태입니다.")
         };
-        let hint = if e.contains("외래키") {
+        // "외래키"로 매칭하면 db.rs의 "외래키 설정 복구에도 실패했습니다"까지 걸려,
+        // 원인이 다른데 "다시 열어도 같은 결과"라는 잘못된 안내가 나간다.
+        let hint = if e.contains("무결성 위반") {
             // 다시 열어도 같은 지점에서 멈춘다. 재시도를 권하면 안 된다.
-            "파일 안의 연결 정보가 어긋나 있습니다. 다시 열어도 같은 결과이므로, 백업 파일로 되돌리거나 도움을 요청해주세요."
+            "파일 안의 연결 정보가 어긋나 있습니다. 다시 열어도 같은 결과입니다. 이 상태에서는 앱이 백업을 만들 수 없으니, 파일 탐색기로 파일을 복사해 두신 뒤 도움을 요청해주세요."
         } else {
             "디스크 여유 공간을 확인하고, 파일이 다른 프로그램에서 열려 있지 않은지 확인한 뒤 다시 열어주세요."
         };
@@ -234,8 +220,14 @@ pub fn migrate_schema_impl(
     // (open_project_impl의 resume_pending_purge는 migrate보다 먼저 돌기 때문에
     //  이번 열기의 표시를 처리하지 못한다. 그래서 여기서 한 번 더 시도한다.)
     //
-    // 이 정리가 끝난 뒤에야 백업을 떠야 한다. 프론트엔드가 migrate → backup 순서로
-    // 부르는 이유이기도 하다 — 정리 전에 뜨면 프리 페이지의 평문까지 사본에 담긴다.
+    // 실패하면 파일 안에 평문 메모가 남는다. 그 사실은 get_encryption_status의
+    // purge_pending으로 화면에 전달된다 — 프론트엔드가 마이그레이션 직후 그것을
+    // 다시 읽어 사용자에게 알린다.
+    //
+    // 참고: 백업이 이 정리에 의존하지는 않는다. VACUUM INTO는 프리 페이지도
+    // 페이지 슬랙도 복사하지 않으므로, 정리가 실패한 상태에서 뜬 사본에도 평문은
+    // 담기지 않는다(실측 확인). migrate → backup 순서의 근거는 그것이 아니라
+    // "변환 전 파일은 살아 있는 행 자체가 평문"이라는 것이다.
     let _ = crate::commands::crypto::resume_pending_purge(conn);
 
     Ok(())

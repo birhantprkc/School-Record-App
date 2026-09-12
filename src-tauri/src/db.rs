@@ -109,14 +109,33 @@ pub fn migrate(
             // (둘의 앞뒤 순서는 상관없다 — 어느 쪽이 먼저든 실패하면 함께 롤백된다.)
             // data_step을 트랜잭션 밖으로 빼는 순간 "새 버전인데 데이터는 옛 표현"인
             // 파일이 만들어지고, 그 파일은 다음에 열릴 때 복구가 안 된다.
+            //
+            // data_step 쪽은 테스트가 잡는다. **user_version 승격 쪽은 못 잡는다** —
+            // 커밋 밖으로 빼도 실패 시에는 승격 자체가 일어나지 않아 기존 단언이
+            // 그대로 참이고, 차이는 커밋과 승격 사이의 크래시 창에서만 드러난다.
+            // 그래서 구조로 막는다: 승격은 `tx`를 받아야만 쓸 수 있다.
+            // (`with_purge_marked_transaction`이 표시를 함수 안에 가둔 것과 같은 이유)
             data_step(&tx, v + 1)?;
 
             // user_version을 pragma_update API로 설정 (format! 없이 안전하게)
             tx.pragma_update(None, "user_version", v + 1)
                 .map_err(|e| e.to_string())?;
 
-            // 커밋 전 외래키 무결성 검증 — 위반 행이 하나라도 있으면 롤백
-            {
+            // 커밋 전 외래키 무결성 검증 — 위반 행이 하나라도 있으면 롤백.
+            //
+            // **DDL을 실제로 실행한 단계에서만 돈다.** 이 검사는 전 DB를 훑으므로,
+            // 스키마를 바꾸지 않는 단계에서 돌리면 마이그레이션이 만든 위반이 아니라
+            // **원래 파일에 있던** 위반을 잡는다. 그러면 그 파일은 열 때마다 같은
+            // 지점에서 멈추고, 데이터는 멀쩡한데 앱 안에 탈출구가 없어진다.
+            //
+            // v2가 그 경우였다. SCHEMA_VERSION이 줄곧 1이라 db::migrate는 배포된
+            // 파일에서 한 번도 실행된 적이 없었고, v1→v2는 DDL이 없는데도 모든
+            // 사용자 파일이 이 검사를 난생처음 통과해야 했다.
+            //
+            // 데이터 변환(data_step)이 FK 컬럼을 건드리는 단계를 새로 만든다면
+            // 그때는 이 조건을 함께 손봐야 한다. 지금까지의 변환은 TEXT 컬럼의
+            // 값만 바꾼다.
+            if !sql.is_empty() {
                 let mut stmt = tx
                     .prepare("PRAGMA foreign_key_check;")
                     .map_err(|e| e.to_string())?;
@@ -141,6 +160,10 @@ pub fn migrate(
 
     // 둘 다 실패하면 `Result::and`는 복구 실패를 버린다. 그러면 커넥션이 세션 내내
     // foreign_keys = OFF로 남아 CASCADE가 안 도는데 아무도 모른다. 합쳐서 올린다.
+    //
+    // (Err, Err) 분기는 **테스트로 고정할 수 없다.** rusqlite에서
+    // `PRAGMA foreign_keys = ON`은 트랜잭션 안에서도 오류가 아니라 조용히 무시되므로
+    // 인위적으로 실패시킬 방법이 없다. 지키는 테스트가 없다는 것을 알고 남긴다.
     match (result, fk_result) {
         (Ok(()), fk) => fk,
         (Err(e), Ok(())) => Err(e),

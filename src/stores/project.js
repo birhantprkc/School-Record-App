@@ -6,6 +6,13 @@ export const useProjectStore = defineStore('project', () => {
   const isOpen = ref(false)
   const filePath = ref('')
 
+  // 파일을 여는 도중 나왔지만 **열기를 막을 정도는 아닌** 문제들.
+  //
+  // 홈 화면에서 띄우면 곧바로 작업 화면으로 넘어가며 사라지므로 여기 담아 두고
+  // WorkspaceView가 배너로 보여준다. 조용히 넘기면 사용자는 파일 안에 평문이
+  // 남았다는 것도, 이번 열기에 백업이 없다는 것도 알 수 없다.
+  const openWarnings = ref([])
+
   function setProject(path) {
     filePath.value = path
     isOpen.value = true
@@ -14,6 +21,7 @@ export const useProjectStore = defineStore('project', () => {
   function closeProject() {
     filePath.value = ''
     isOpen.value = false
+    openWarnings.value = []
   }
 
   async function newProject(path) {
@@ -40,5 +48,5 @@ export const useProjectStore = defineStore('project', () => {
     return await invoke('check_and_update_app_version')  // null | "" | "0.2.x"
   }
 
-  return { isOpen, filePath, setProject, closeProject, newProject, openProject, backupProject, migrateSchema, checkAndUpdateVersion }
+  return { isOpen, filePath, openWarnings, setProject, closeProject, newProject, openProject, backupProject, migrateSchema, checkAndUpdateVersion }
 })
