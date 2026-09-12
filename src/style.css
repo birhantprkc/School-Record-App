@@ -228,7 +228,11 @@ input[type="password"]::-ms-clear {
   @apply text-ink-3 text-base cursor-pointer transition-colors duration-150;
   border-radius: var(--radius-btn);
 }
-.btn-secondary:hover { background-color: var(--c-line); }
+/* hover와 disabled는 반드시 같이 둔다. disabled 스타일 없이 두면 눌러도 반응은
+ * 없는데 멀쩡해 보이는 버튼이 되어, 아예 막지 않은 것보다 나쁘다.
+ * (실제로 비밀번호 모달의 취소, 마법사의 '이전'이 그 상태였다.) */
+.btn-secondary:hover:not(:disabled) { background-color: var(--c-line); }
+.btn-secondary:disabled { @apply opacity-50 cursor-not-allowed; }
 
 .btn-danger {
   @apply inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-red text-base cursor-pointer;
@@ -236,7 +240,8 @@ input[type="password"]::-ms-clear {
   border: 1px solid color-mix(in srgb, var(--c-red) 30%, transparent);
   background-color: color-mix(in srgb, var(--c-red) 10%, transparent);
 }
-.btn-danger:hover { background-color: color-mix(in srgb, var(--c-red) 18%, transparent); }
+.btn-danger:hover:not(:disabled) { background-color: color-mix(in srgb, var(--c-red) 18%, transparent); }
+.btn-danger:disabled { @apply opacity-50 cursor-not-allowed; }
 
 .btn-danger-fill {
   @apply inline-flex items-center gap-1.5 px-5 py-2.5 border-none bg-red text-white;
