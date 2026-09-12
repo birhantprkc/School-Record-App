@@ -50,7 +50,10 @@ onMounted(async () => {
     const win = getCurrentWindow()
     await win.setResizable(true)
     await win.setMinSize(new LogicalSize(900, 600))
-    await win.setSize(new LogicalSize(1280, 720))
+    // 1280은 툴바가 한 줄에 안 들어간다. 실측: 툴바에 필요한 폭이 1074px,
+    // 사이드바(240px)를 더하면 1314px이라 1280에서는 34px이 모자라 두 줄이 됐다.
+    // 1360으로 두면 46px 여유가 생기고, 학교에 흔한 1366×768 화면에도 들어간다.
+    await win.setSize(new LogicalSize(1360, 720))
     await win.center()
   } catch {
     // 창 리사이즈 실패는 비치명적이므로 무시
