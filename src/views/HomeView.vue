@@ -2,24 +2,22 @@
 import {onMounted, ref} from 'vue'
 import {useRouter} from 'vue-router'
 import {open, save} from '@tauri-apps/plugin-dialog'
-import {getVersion} from '@tauri-apps/api/app'
 import {openUrl} from '@tauri-apps/plugin-opener'
 import {useProjectStore} from '../stores/project'
 import {useConfigStore} from '../stores/configStore'
 import PasswordModal from '../components/PasswordModal.vue'
 import ReleaseNotesModal from '../components/ReleaseNotesModal.vue'
+import UpdateModal from '../components/UpdateModal.vue'
+import {useUpdateStore} from '../stores/updateStore.js'
 import {getNotesToShow} from '../data/releaseNotes'
 
 const router = useRouter()
 const project = useProjectStore()
 const config = useConfigStore()
+const update = useUpdateStore()
 const error = ref('')
 
-const currentVersion = ref('')
 const showUpdateModal = ref(false)
-const updateStatus = ref('idle') // 'idle' | 'checking' | 'latest' | 'found' | 'error'
-const latestVersion = ref('')
-const releaseUrl = ref('')
 
 const showPasswordModal = ref(false)
 const passwordError = ref('')
@@ -27,8 +25,9 @@ const passwordLoading = ref(false)
 const showReleaseNotesModal = ref(false)
 const releaseNotesToShow = ref([])
 
-onMounted(async () => {
-  currentVersion.value = await getVersion()
+// 화면 아래 버전 표기에 쓴다. 네트워크 요청이 아니라 앱 자신의 버전을 읽는 것이다.
+onMounted(() => {
+  update.loadCurrentVersion()
 })
 
 async function handleNew() {
@@ -142,26 +141,6 @@ function handlePasswordCancel() {
   project.closeProject()
 }
 
-async function checkUpdate() {
-  showUpdateModal.value = true
-  updateStatus.value = 'checking'
-  try {
-    const res = await fetch('https://api.github.com/repos/itmir913/School-Record-App/releases/latest')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    latestVersion.value = data.tag_name
-    releaseUrl.value = data.html_url
-    const tag = data.tag_name.replace(/^v/, '')
-    updateStatus.value = tag !== currentVersion.value?.replace(/^v/, '') ? 'found' : 'latest'
-  } catch {
-    updateStatus.value = 'error'
-  }
-}
-
-function closeUpdateModal() {
-  showUpdateModal.value = false
-  updateStatus.value = 'idle'
-}
 </script>
 
 <template>
@@ -220,7 +199,7 @@ function closeUpdateModal() {
           </button>
 
           <div class="action-row">
-            <button class="btn-update" @click="checkUpdate">
+            <button class="btn-update" @click="showUpdateModal = true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="1 4 1 10 7 10"/>
@@ -256,7 +235,7 @@ function closeUpdateModal() {
         </transition>
 
         <p class="version">
-          v{{ currentVersion }} |
+          v{{ update.currentVersion }} |
           <a href="https://github.com/itmir913/School-Record-App/#%EB%9D%BC%EC%9D%B4%EC%84%A0%EC%8A%A4" target="_blank">
             <u>Educational Use Only</u>
           </a>
@@ -281,81 +260,8 @@ function closeUpdateModal() {
         @close="handleReleaseNotesClose"
     />
 
-    <!-- 업데이트 모달 -->
-    <transition name="modal">
-      <div v-if="showUpdateModal" class="overlay">
-        <div class="modal">
-          <div class="modal-header">
-            <div>
-              <h2>업데이트 확인</h2>
-              <p>현재 버전 v{{ currentVersion }}</p>
-            </div>
-            <button class="close-btn" @click="closeUpdateModal">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-          <div class="update-body">
-
-            <!-- 확인 중 -->
-            <div v-if="updateStatus === 'checking'" class="update-checking">
-              <div class="spinner"/>
-              <p>최신 버전을 확인하는 중…</p>
-            </div>
-
-            <!-- 최신 버전 -->
-            <div v-else-if="updateStatus === 'latest'" class="update-state update-latest">
-              <svg width="25" height="25" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
-              <div>
-                <p class="state-title">최신 버전입니다</p>
-                <p class="state-desc">현재 사용 중인 버전이 최신입니다.</p>
-              </div>
-            </div>
-
-            <!-- 새 버전 있음 -->
-            <div v-else-if="updateStatus === 'found'" class="update-state update-found">
-              <svg width="25" height="25" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path
-                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              </svg>
-              <div>
-                <p class="state-title">새 버전이 있습니다 — {{ latestVersion }}</p>
-                <p class="state-desc">GitHub에서 최신 버전을 다운로드할 수 있습니다.</p>
-              </div>
-            </div>
-
-            <!-- 오류 -->
-            <div v-else-if="updateStatus === 'error'" class="update-state update-error">
-              <svg width="25" height="25" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 8v4m0 4h.01"/>
-              </svg>
-              <div>
-                <p class="state-title">확인에 실패했습니다</p>
-                <p class="state-desc">인터넷 연결을 확인한 후 다시 시도해 주세요.</p>
-              </div>
-            </div>
-
-            <!-- 다운로드 버튼 (새 버전일 때만) -->
-            <button v-if="updateStatus === 'found'" class="btn-download" @click="openUrl(releaseUrl)">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-              </svg>
-              GitHub에서 다운로드
-            </button>
-
-          </div>
-        </div>
-      </div>
-    </transition>
+    <!-- 업데이트 확인 모달 (작업 화면 사이드바와 같은 컴포넌트) -->
+    <UpdateModal v-if="showUpdateModal" @close="showUpdateModal = false"/>
   </div>
 </template>
 
@@ -593,171 +499,4 @@ function closeUpdateModal() {
   color: var(--clr-text-hint);
 }
 
-/* ── 모달 오버레이 ── */
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(4, 6, 12, 0.75);
-  backdrop-filter: blur(6px);
-}
-
-.modal {
-  width: 100%;
-  max-width: 560px;
-  background-color: #0e1220;
-  border: 1px solid #1a2035;
-  border-radius: 24px;
-  padding: 34px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
-}
-
-.modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.modal-header h2 {
-  font-size: 19px;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin: 0;
-}
-
-.modal-header p {
-  font-size: 14px;
-  color: var(--clr-text-hint);
-  margin: 5px 0 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--clr-text-hint);
-  padding: 8px;
-  border-radius: 10px;
-  display: flex;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.close-btn:hover {
-  background-color: #1a2035;
-  color: #7ba3d4;
-}
-
-/* ── 업데이트 모달 바디 ── */
-.update-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.update-checking {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 30px 0;
-  color: var(--clr-text-hint);
-  font-size: 16px;
-}
-
-.spinner {
-  width: 30px;
-  height: 30px;
-  border: 2px solid #1a2035;
-  border-top-color: #4c6ef5;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.update-state {
-  display: flex;
-  align-items: flex-start;
-  gap: 15px;
-  padding: 18px 20px;
-  border-radius: 14px;
-  border: 1px solid;
-}
-
-.update-latest {
-  background-color: #0a1f14;
-  border-color: #1a4a2a;
-  color: #4ade80;
-}
-
-.update-found {
-  background-color: #1c1508;
-  border-color: #4a3800;
-  color: #fbbf24;
-}
-
-.update-error {
-  background-color: #1c0a0a;
-  border-color: #4a1a1a;
-  color: #fca5a5;
-}
-
-.update-state svg {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.state-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 5px;
-}
-
-.state-desc {
-  font-size: 14px;
-  opacity: 0.75;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.btn-download {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 14px 20px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  background-color: #3b5bdb;
-  color: #ffffff;
-  transition: background-color 0.15s, transform 0.1s;
-}
-
-.btn-download:hover {
-  background-color: #4c6ef5;
-}
-
-.btn-download:active {
-  transform: scale(0.98);
-}
-
-.modal-enter-from, .modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active, .modal-leave-active {
-  transition: opacity 0.2s;
-}
 </style>

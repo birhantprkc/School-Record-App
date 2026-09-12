@@ -17,6 +17,7 @@ import ChecklistSection from '../sections/ChecklistSection.vue'
 import ReplaceSection from '../sections/ReplaceSection.vue'
 import InspectSection from '../sections/InspectSection.vue'
 import SnapshotModal from '../components/SnapshotModal.vue'
+import UpdateModal from '../components/UpdateModal.vue'
 import SettingsSection from '../sections/SettingsSection.vue'
 
 const project = useProjectStore()
@@ -26,6 +27,7 @@ const collapsed = ref(false)
 const activeSection = ref('overview')
 const sectionKey = ref(0)
 const showSnapshotModal = ref(false)
+const showUpdateModal = ref(false)
 
 const sectionMap = {
   overview: OverviewSection,
@@ -71,6 +73,7 @@ onMounted(async () => {
         :file-path="project.filePath"
         @select="activeSection = $event"
         @openSnapshot="showSnapshotModal = true"
+        @openUpdate="showUpdateModal = true"
     />
     <main class="flex-1 overflow-y-auto bg-surface flex flex-col">
       <!-- 화면을 떠나는 순간 저장에 실패한 경우. 그 배너를 띄우던 컴포넌트는 이미
@@ -100,6 +103,7 @@ onMounted(async () => {
       </div>
       <component :is="currentSection" :key="sectionKey" @navigate="activeSection = $event"/>
     </main>
+    <UpdateModal v-if="showUpdateModal" @close="showUpdateModal = false"/>
     <SnapshotModal
         v-if="showSnapshotModal"
         @close="showSnapshotModal = false"

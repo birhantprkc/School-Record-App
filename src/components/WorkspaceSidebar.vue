@@ -15,11 +15,13 @@ import {
   PenLine,
   Replace,
   ScanSearch,
+  RefreshCw,
   Settings,
   Upload,
   Users,
 } from 'lucide-vue-next'
 import {WebviewWindow} from '@tauri-apps/api/webviewWindow'
+import {useUpdateStore} from '../stores/updateStore.js'
 
 const props = defineProps({
   collapsed: Boolean,
@@ -27,7 +29,9 @@ const props = defineProps({
   filePath: String,
 })
 
-const emit = defineEmits(['update:collapsed', 'select', 'openSnapshot'])
+const emit = defineEmits(['update:collapsed', 'select', 'openSnapshot', 'openUpdate'])
+
+const update = useUpdateStore()
 
 const fileName = computed(() => {
   if (!props.filePath) return ''
@@ -170,6 +174,30 @@ const navGroups = [
       >
         <GitBranch :size="20" class="shrink-0"/>
         <span v-if="!collapsed">스냅샷(Snapshot)</span>
+      </button>
+
+      <!-- 업데이트 확인 버튼 -->
+      <!--
+        새 버전을 찾았을 때만 배지를 단다. 확인은 사용자가 눌러야 일어나므로
+        (자동 조회 없음 — PRIVACY.md 참고), 시작 화면에서 확인해 둔 결과가 있으면
+        파일을 연 뒤에도 여기에 남는다.
+      -->
+      <button
+          class="relative flex items-center gap-2 w-full rounded-btn bg-transparent border-none font-medium cursor-pointer text-left whitespace-nowrap overflow-hidden transition-colors text-ink-3 hover:bg-line hover:text-ink-2"
+          :class="collapsed ? 'justify-center p-2' : 'py-2 px-2.5'"
+          @click="$emit('openUpdate')"
+          title="업데이트 확인"
+      >
+        <RefreshCw :size="20" class="shrink-0"/>
+        <span v-if="!collapsed">업데이트 확인</span>
+        <span
+            v-if="!collapsed && update.status === 'found'"
+            class="ml-auto shrink-0 text-base font-semibold text-amber bg-amber/15 border border-amber/35 rounded-[5px] py-px px-1.5"
+        >New</span>
+        <span
+            v-else-if="collapsed && update.status === 'found'"
+            class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber"
+        />
       </button>
 
       <!-- 설정 버튼 -->
