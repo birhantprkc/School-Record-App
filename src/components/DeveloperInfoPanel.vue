@@ -38,8 +38,8 @@ async function copyEmail() {
 <template>
   <div class="flex flex-col gap-4">
     <dl class="grid grid-cols-[auto_1fr] gap-x-5 gap-y-2.5 m-0 text-base">
-      <dt class="text-ink-4 m-0">만든 사람</dt>
-      <dd class="text-ink-2 m-0">itmir913</dd>
+      <dt class="text-ink-4 m-0">개발자</dt>
+      <dd class="text-ink-2 m-0">luminousky</dd>
 
       <dt class="text-ink-4 m-0">문의</dt>
       <dd class="text-ink-2 m-0 flex items-center gap-2.5 flex-wrap">
