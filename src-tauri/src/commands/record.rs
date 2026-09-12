@@ -278,6 +278,11 @@ pub fn save_snapshot_internal(
         )
         .map_err(|e| e.to_string())?;
 
+    // **의도된 동작이다(CLAUDE.md).** 내용이 그대로면 같은 내용의 행을 또 쌓지 않고,
+    // 가장 최근 행의 note만 이번 작업 이름으로 갱신한다. note는 "이 상태가 마지막으로
+    // 어떤 작업 직전에 보존됐는가"를 가리키므로 최신 작업 이름이 맞다. 그 행의 note가
+    // 사용자가 직접 쓴 메모였다면 덮인다 — 감사에서 "메모 손실"로 반복 보고되는
+    // 지점이지만 바꾸지 말 것.
     if inserted == 0 {
         conn.execute(
             "UPDATE ActivityRecordHistory SET note = COALESCE(?3, note)
