@@ -62,6 +62,32 @@
 판단 기준은 하나다: **"코드가 바뀌면 이 문장이 틀려지는가?"** 그렇다면 수를 빼고
 확인 방법을 대신 적는다.
 
+## 실행 가능한 명령은 셋뿐이다 — `dev` / `build` / `ci`
+로컬·IntelliJ 실행 구성(`.idea/runConfigurations/`)·GitHub Actions가 **모두 이 세
+이름만** 부른다. `package.json`의 나머지는 이 셋이 부르는 내부 단계다.
+
+```
+dev        tauri dev            ← 진입점
+build      tauri build          ← 진입점
+ci         npm run test:rust && npm run test:ts   ← 진입점(검증)
+vite:dev   vite                 ← tauri.conf.json의 beforeDevCommand가 부른다
+vite:build vite build           ← tauri.conf.json의 beforeBuildCommand가 부른다
+test:rust  cargo test --manifest-path src-tauri/Cargo.toml
+test:ts    vitest run
+```
+
+- **진입점을 늘리지 말 것.** 넷째가 생기는 순간 "어디까지 돌려야 검증인지"가 갈린다.
+- **어느 한 곳에 개별 명령을 직접 적지 말 것.** 워크플로우에 `cargo test`를 따로 적거나
+  IntelliJ 구성에 다른 스크립트를 넣으면 로컬과 CI가 갈라진다. 검사를 더하거나 빼려면
+  `ci` 스크립트만 고친다.
+- **`dev`/`build`는 `tauri`를 부르고, tauri는 다시 `vite:*`를 부른다.** `tauri.conf.json`의
+  `beforeDevCommand`/`beforeBuildCommand`가 진입점 이름(`npm run dev`/`npm run build`)을
+  가리키면 **무한 재귀**가 된다. 이름을 바꿀 때 반드시 같이 확인할 것.
+- 빌드 옵션은 `npm run build -- <옵션>`으로 넘긴다. 플랫폼별 스크립트를 따로 만들지 말 것
+  (배포 워크플로우가 이 방식을 쓴다).
+- `.idea/`는 `.gitignore`에 있지만 실행 구성은 **추적 대상이다**. 새로 추가하려면
+  `git add -f`가 필요하다.
+
 ## GIT / COMMIT RULES
 - **GPG 서명 필수**: 모든 커밋에 `-S` 플래그 사용. `git commit -S -m "..."`
 - **Co-Authored-By / Co-Worked 문구 삽입 금지**: 커밋 메시지에 Claude 관련 문구 일절 포함하지 않는다.

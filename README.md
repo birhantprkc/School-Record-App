@@ -99,40 +99,34 @@
 ### 실행
 
 ```bash
-# 의존성 설치
-npm install
-
-# 개발 모드 실행 (Vite + Tauri)
-npm run tauri dev
+# 의존성 설치 (락파일 그대로 설치한다)
+npm ci
 ```
 
-### 테스트
+이 프로젝트에서 **직접 실행하는 명령은 세 개뿐이다.**
+
+| 명령 | 하는 일 |
+|---|---|
+| `npm run dev` | 개발 모드로 앱을 띄운다 (Vite + Tauri) |
+| `npm run build` | 릴리즈 빌드를 만든다 |
+| `npm run ci` | 전체 검증 — Rust + 프론트엔드 단위 테스트 |
 
 ```bash
-# 전체 단위 테스트
-npm run test
-
-# Cargo Rust 백엔드 단위 테스트
-npm run test:rust
-
-# Vue.js 프론트엔드 단위 테스트
-npm run test:ts
+npm run dev
+npm run build
+npm run ci
 ```
 
-### 빌드
+`package.json`의 나머지 스크립트(`vite:*`, `test:*`)는 **위 세 개가 부르는 내부 단계**다.
+직접 부르지 말 것. 로컬·IntelliJ 실행 구성·GitHub Actions가 모두 이 세 이름만 사용하며,
+어느 한 곳에 개별 명령을 따로 적으면 그 순간 로컬과 CI가 갈라진다.
+
+빌드 옵션은 `build`에 그대로 넘긴다. 배포 워크플로우도 이 방식을 쓴다.
 
 ```bash
-# 전체 빌드
-npm run tauri build
-
-# 포터블 실행 파일 빌드
-npm run tauri:windows:portable
-
-# 설치 파일 (NSIS) 빌드
-npm run tauri:windows:installer
-
-# MacOS 빌드
-npm run tauri:macos
+npm run build -- --no-bundle                                   # 포터블 실행 파일
+npm run build -- --bundles nsis                                # Windows 설치 파일
+npm run build -- --target universal-apple-darwin --bundles dmg # macOS
 ```
 
 ---

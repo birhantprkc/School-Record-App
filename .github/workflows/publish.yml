@@ -12,13 +12,13 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest"
-            script: "tauri:macos"
+            build_args: "--target universal-apple-darwin --bundles dmg"
             rust_target: "aarch64-apple-darwin,x86_64-apple-darwin"
             bundle_path: "src-tauri/target/universal-apple-darwin/release/bundle/dmg"
             artifact_name: "macos"
             artifact_ext: "dmg"
           - platform: "windows-latest"
-            script: "tauri:windows:installer"
+            build_args: "--bundles nsis"
             rust_target: ""
             bundle_path: "src-tauri/target/release/bundle/nsis"
             artifact_name: "windows-x64"
@@ -47,11 +47,11 @@ jobs:
         run: npm install
 
       - name: build
-        run: npm run ${{ matrix.script }}
+        run: npm run build -- ${{ matrix.build_args }}
 
       - name: build portable (Windows only)
         if: matrix.platform == 'windows-latest'
-        run: npm run tauri:windows:portable
+        run: npm run build -- --no-bundle
 
       - name: get version
         id: version

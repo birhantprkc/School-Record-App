@@ -47,5 +47,7 @@ jobs:
         # 같은 커밋이면 항상 같은 의존성으로 테스트된다.
         run: npm ci
 
-      - name: unit test
-        run: npm run test
+      # 검증 진입점은 npm run ci 하나다. 로컬·IntelliJ·여기가 모두 이것만 부른다.
+      # 여기에 개별 명령을 직접 적으면 그 순간 CI와 로컬이 갈라진다.
+      - name: test
+        run: npm run ci
