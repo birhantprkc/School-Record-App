@@ -1,5 +1,5 @@
 <script setup>
-import {onMounted} from 'vue'
+import {onMounted, ref} from 'vue'
 import {openUrl} from '@tauri-apps/plugin-opener'
 import {AlertTriangle, Check, CircleAlert, Download, X} from 'lucide-vue-next'
 import {useEscapeKey} from '../composables/useEscapeKey.js'
@@ -11,10 +11,24 @@ const emit = defineEmits(['close'])
 useEscapeKey(() => emit('close'))
 
 // 모달을 여는 것 자체가 "확인해줘"라는 뜻이다. 이미 확인한 결과가 있으면 그대로 보여준다.
+// 이 모달은 "업데이트 확인" 버튼으로만 열려야 한다 — updateStore의 주석 참고.
 onMounted(() => {
   update.loadCurrentVersion()
   if (update.status === 'idle') update.checkUpdate()
 })
+
+// 기본 브라우저가 없거나 열기가 거부되면 버튼이 아무 반응도 없는 것처럼 보인다.
+// 그때는 주소를 직접 보여 준다.
+const openError = ref('')
+
+async function openRelease() {
+  openError.value = ''
+  try {
+    await openUrl(update.releaseUrl)
+  } catch {
+    openError.value = update.releaseUrl
+  }
+}
 </script>
 
 <template>
@@ -82,19 +96,24 @@ onMounted(() => {
           <button
               v-if="update.status === 'found'"
               class="flex items-center justify-center gap-2.5 flex-1 py-3.5 px-5 rounded-btn text-base font-medium cursor-pointer border-none bg-blue text-white transition-[background-color,transform] hover:bg-blue-2 active:scale-[0.98]"
-              @click="openUrl(update.releaseUrl)"
+              @click="openRelease"
           >
             <Download :size="18"/>
             GitHub에서 내려받기
           </button>
           <button
-              v-if="update.status === 'latest' || update.status === 'error'"
+              v-if="update.status === 'latest' || update.status === 'error' || update.status === 'found'"
               class="flex-1 py-3.5 px-5 rounded-btn text-base font-medium cursor-pointer bg-transparent border border-line text-ink-3 transition-colors hover:bg-line hover:text-ink"
               @click="update.checkUpdate()"
           >
             다시 확인
           </button>
         </div>
+
+        <p v-if="openError" class="text-base text-ink-4 m-0 leading-relaxed">
+          브라우저를 열지 못했습니다. 아래 주소를 직접 입력해 주세요.<br>
+          <span class="text-ink-3 select-text break-all">{{ openError }}</span>
+        </p>
       </div>
     </div>
   </div>

@@ -1,9 +1,9 @@
-use crate::commands::config::set_config_impl;
+use crate::commands::config::{has_app_configs, set_config_impl};
 use crate::engine::{validate_existing_path, validate_parent_dir_path};
 use crate::state::{
     clear_crypto_state, CryptoStateHandle, DbPathState, DbState, ReplaceCacheState,
 };
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use tauri::State;
 
 pub(crate) fn new_project_impl(
@@ -124,27 +124,6 @@ pub fn open_project(
 #[tauri::command]
 pub fn backup_project(state: State<DbState>, db_path: State<DbPathState>) -> Result<(), String> {
     backup_project_impl(&state, &db_path)
-}
-
-/// 암호화 설정을 담는 APP_CONFIGS가 있는가.
-///
-/// 버전 도입 이전(v0) 파일에는 이 테이블이 아예 없을 수 있다. 그 시절에는 암호화
-/// 기능 자체가 없었으므로, 없으면 "암호화를 쓰지 않는 파일"로 본다.
-///
-/// 테이블 유무를 보지 않고 조회하면 v0 파일이 v1로도 올라가지 못한다 —
-/// `MIGRATIONS[0]`이 존재하는 이유가 바로 그 승격이다. 조회 실패를 삼키는 것은
-/// 아니다. 테이블이 있으면 읽기 오류는 그대로 올린다(`get_config_impl` 주석 참고 —
-/// 읽기 실패를 None으로 뭉개면 암호화된 DB를 평문으로 취급하게 된다).
-fn has_app_configs(conn: &Connection) -> Result<bool, String> {
-    Ok(conn
-        .query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='APP_CONFIGS'",
-            [],
-            |_| Ok(()),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .is_some())
 }
 
 /// 파일을 현재 스키마 버전까지 올린다.

@@ -13,6 +13,33 @@ use tauri::State;
 /// `*_impl` 함수는 crypto 모듈이 salt를 읽고 쓰는 정상 경로이므로 막지 않는다.
 pub(crate) const PROTECTED_KEY_PREFIX: &str = "encryption_";
 
+/// 암호화 설정을 담는 APP_CONFIGS가 있는가.
+///
+/// 버전 도입 이전(v0) 파일에는 이 테이블이 아예 없을 수 있다. 0.2.5까지의 릴리즈로
+/// 만든 파일이 그렇고, `open_existing`은 기존 파일에 `schema.sql`을 실행하지 않으므로
+/// 나중에도 생기지 않는다. 그 시절에는 암호화 기능 자체가 없었으므로, 없으면
+/// "암호화를 쓰지 않는 파일"로 본다.
+///
+/// **APP_CONFIGS를 건드리는 코드는 열기 흐름에서 이 함수를 먼저 통과해야 한다.**
+/// 하나라도 빠뜨리면 그 조회가 `no such table`로 실패하고, v0 파일을 쓰는 사용자는
+/// 마이그레이션(`migrate_schema_impl`이 정식으로 지원한다)에 닿기도 전에 자기 파일을
+/// 열 방법이 없어진다.
+///
+/// 조회 실패를 삼키는 것은 아니다. 테이블이 있으면 읽기 오류는 그대로 올린다
+/// (`get_config_impl` 주석 참고 — 읽기 실패를 None으로 뭉개면 암호화된 DB를
+/// 평문으로 취급하게 된다).
+pub(crate) fn has_app_configs(conn: &Connection) -> Result<bool, String> {
+    Ok(conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='APP_CONFIGS'",
+            [],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .is_some())
+}
+
 /// 프론트엔드에서 접근할 수 없는 키이면 오류를 반환한다.
 pub(crate) fn ensure_not_protected(key: &str) -> Result<(), String> {
     if key.starts_with(PROTECTED_KEY_PREFIX) {

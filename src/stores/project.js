@@ -16,6 +16,9 @@ export const useProjectStore = defineStore('project', () => {
   function setProject(path) {
     filePath.value = path
     isOpen.value = true
+    // 경고는 그 파일 한 번의 열기에만 해당한다. 여기서 비우지 않으면 앞서 실패한
+    // 파일의 경고가 다음에 연 파일 — 새로 만든 빈 파일까지 — 에 그대로 따라붙는다.
+    openWarnings.value = []
   }
 
   function closeProject() {

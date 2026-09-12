@@ -83,6 +83,12 @@ pub fn get_snapshots_impl(
 }
 
 pub fn restore_snapshot_impl(conn: &Connection, snapshot_id: i64) -> Result<i64, String> {
+    // 암호화 컬럼(ActivityRecord.content)에 쓰면서 키를 받지 않는 유일한 경로다.
+    // 지금은 암호문을 암호문 그대로 옮기므로 표현이 섞이지 않지만, 그건 이 함수가
+    // 값을 건드리지 않는 동안에만 참이다. 변환이나 note/memo 쓰기가 여기에 붙는
+    // 순간 조용히 가드 밖에서 실행되므로, 다른 쓰기 경로와 같은 선에 세워 둔다.
+    crate::commands::crypto::ensure_migrated(conn)?;
+
     let snapshot_at: String = conn
         .query_row(
             "SELECT created_at FROM Snapshot WHERE id = ?1",

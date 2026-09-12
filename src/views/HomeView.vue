@@ -64,13 +64,15 @@ async function handleOpen() {
       await showReleaseNotesOrNavigate()
     }
   } catch (e) {
+    // 열기에 실패했으면 "열린 파일"로 남겨 두지 않는다. isOpen이 참인 채로 남으면
+    // 라우터 가드는 통과시키므로, 작업 화면으로 가는 진입점이 하나만 더 생겨도
+    // 마이그레이션에 실패한 파일로 화면이 열린다.
+    project.closeProject()
     error.value = String(e)
   }
 }
 
 async function showReleaseNotesOrNavigate() {
-  project.openWarnings = []
-
   // 백업은 반드시 마이그레이션 **뒤에** 한다.
   //
   // 앞에 두면 메모 암호화로 넘어가는 그 한 번의 열기에서, 사본에 평문 메모가 담긴
@@ -90,8 +92,14 @@ async function showReleaseNotesOrNavigate() {
           '설정 화면에서 "지금 정리"를 눌러 다시 시도하실 수 있습니다.'
       )
     }
-  } catch {
-    // 상태 조회 실패로 열기를 막지는 않는다. 설정 화면이 같은 값을 다시 읽는다.
+  } catch (e) {
+    // 상태 조회 실패로 열기를 막지는 않는다. 다만 조용히 넘기면 안 된다 —
+    // 이 값이 정리 미완료(평문 잔존)를 알리는 유일한 통로이고, 설정 화면은
+    // 이 값을 다시 읽지 않는다. 못 읽었다는 사실 자체를 알린다.
+    project.openWarnings.push(
+        `파일 정리 상태를 확인하지 못했습니다. 암호화되기 전의 내용이 파일 안에 남아 ` +
+        `있을 수 있으니, 설정 화면에서 "지금 정리"를 한 번 눌러 주세요. ${e}`
+    )
   }
 
   // 백업 실패로 열기를 막으면 안 된다.
@@ -105,7 +113,20 @@ async function showReleaseNotesOrNavigate() {
     project.openWarnings.push(`이번에는 백업 파일을 만들지 못했습니다. ${e}`)
   }
 
-  const oldVersion = await project.checkAndUpdateVersion()
+  // 버전 기록도 열기를 막으면 안 된다. 백업과 같은 이유다 — 이건 릴리즈 노트를
+  // 한 번 띄우기 위한 기록일 뿐인데, DB에 쓰기를 하므로 읽기 전용 매체(USB·공유
+  // 폴더)나 다른 인스턴스의 잠금에 걸려 실패할 수 있다. 막아 버리면 멀쩡한 파일이
+  // 안 열리고, 암호화 파일이라면 그 오류가 비밀번호 모달에 떠 **비밀번호가 틀린
+  // 것으로 오해**하게 된다.
+  let oldVersion = null
+  try {
+    oldVersion = await project.checkAndUpdateVersion()
+  } catch (e) {
+    project.openWarnings.push(
+        `이번에는 파일에 버전 기록을 남기지 못했습니다. 다음에 열 때 새 소식이 ` +
+        `한 번 더 표시될 수 있습니다. ${e}`
+    )
+  }
   if (oldVersion !== null) {
     releaseNotesToShow.value = getNotesToShow(oldVersion)
     showReleaseNotesModal.value = true

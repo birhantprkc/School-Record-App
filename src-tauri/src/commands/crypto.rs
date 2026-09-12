@@ -237,7 +237,19 @@ fn validate_new_password(password: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 이 파일이 암호화를 쓰는가.
+///
+/// APP_CONFIGS가 아예 없는 파일(v0)은 "쓰지 않음"이다. 암호화 기능이 생기기 전에
+/// 만들어진 파일이라 설정을 저장한 적이 없다.
+///
+/// **여기서 오류를 내면 그 파일은 열리지도 않는다.** 프론트엔드는 잠금 해제 여부를
+/// 정하려고 마이그레이션보다 **먼저** 이 값을 읽는다(그래야 키를 쥔 채로 변환할 수
+/// 있다). 그래서 `migrate_schema_impl`이 `has_app_configs`로 v0 파일을 정식 지원해도,
+/// 이 함수가 `no such table`로 먼저 실패하면 그 지원에 닿지 못한다.
 pub(crate) fn is_encryption_enabled(conn: &Connection) -> Result<bool, String> {
+    if !crate::commands::config::has_app_configs(conn)? {
+        return Ok(false);
+    }
     Ok(get_config_impl(conn, KEY_ENCRYPTION_ENABLED)?.as_deref() == Some("true"))
 }
 
@@ -371,10 +383,16 @@ pub(crate) fn unlock_encryption_impl(
 /// 롤백으로 0바이트가 된다(`integrity_check`는 그래도 ok를 돌려준다).
 ///
 /// 실패 시 지우는 것도 **자기가 만든 .part뿐**이다. 최종 이름을 지우면 같은 초에
-/// 다른 인스턴스가 만든 정상 백업을 지울 수 있다.
+/// 다른 인스턴스가 만든 정상 백업을 지울 수 있다. 그래서 임시 이름에 프로세스 번호를
+/// 넣는다 — 넣지 않으면 같은 초에 같은 파일을 연 두 인스턴스가 같은 `.part`를
+/// 노리고, 한쪽의 실패 정리가 **다른 쪽이 쓰는 중인 파일을 지운다.**
+///
+/// 다만 최종 이름으로의 `rename`은 대상이 있으면 덮어쓴다(Windows의 `MoveFileEx`
+/// 동작이다). `unique_backup_path`가 없는 이름을 골라 주므로 남의 백업을 덮는 일은
+/// 사실상 없고, 설령 같은 초에 겹치더라도 두 사본의 원본이 같은 DB라 내용이 같다.
 pub(crate) fn vacuum_into_backup(conn: &Connection, dest: &Path) -> Result<(), String> {
     let mut part = dest.as_os_str().to_os_string();
-    part.push(".part");
+    part.push(format!(".{}.part", std::process::id()));
     let part = PathBuf::from(part);
     let part_str = part
         .to_str()
@@ -458,6 +476,12 @@ pub(crate) fn with_purge_marked_transaction(
 
 /// 정리가 밀려 있는지 확인한다. 화면에 알리기 위한 조회다.
 pub(crate) fn is_purge_pending(conn: &Connection) -> Result<bool, String> {
+    // APP_CONFIGS가 없는 파일(v0)에는 표시를 남긴 적도 없다. `is_encryption_enabled`와
+    // 같은 이유로, 여기서 오류를 내면 get_encryption_status가 실패해 그 파일이
+    // 열리지 않는다.
+    if !crate::commands::config::has_app_configs(conn)? {
+        return Ok(false);
+    }
     Ok(get_config_impl(conn, KEY_PURGE_PENDING)?.is_some())
 }
 
