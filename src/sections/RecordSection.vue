@@ -687,6 +687,9 @@ function isNewGroup(students, index) {
 
       <!-- 툴바 -->
       <div class="flex flex-wrap items-center px-6 py-2 border-b border-line-2 shrink-0 gap-2 bg-base min-h-15">
+        <!-- 너비 상한을 걸지 않는다(CLAUDE.md). 영역 이름은 끝에 구분 정보가 오는
+             경우가 많아 자르면 정작 구분할 부분이 사라진다. 이름이 길어 툴바가 두
+             줄로 접히는 것은 flex-wrap이 받아내는 의도된 폴백이다. -->
         <div class="flex items-center gap-2 min-w-0">
           <select
               v-model="selectedAreaId"
