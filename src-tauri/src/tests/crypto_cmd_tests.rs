@@ -2769,7 +2769,7 @@ fn test_backup_leaves_only_the_final_name_on_success() {
 }
 
 #[test]
-fn test_backup_leaves_nothing_behind_when_it_cannot_be_written() {
+fn test_backup_makes_nothing_when_the_path_cannot_be_written() {
     let (conn, dir) = file_db_for_backup();
     // 없는 디렉터리 안을 가리키면 VACUUM INTO 단계에서 실패한다.
     let dest = dir.join("no_such_dir").join("out.db.backup");
@@ -2777,11 +2777,48 @@ fn test_backup_leaves_nothing_behind_when_it_cannot_be_written() {
     let err = vacuum_into_backup(&conn, &dest).unwrap_err();
 
     assert!(err.contains("백업 생성 실패"), "실제 오류: {err}");
-    assert!(!dest.exists(), "실패했는데 최종 이름이 남으면 안 된다");
+    // 이 테스트가 주장하는 것은 "아무것도 만들지 않는다"까지다. 실패 지점의 상위
+    // 디렉터리가 없는 채로 남아 있으면 그 안에 임시 파일도 있을 수 없다.
+    // (.part를 만든 **뒤** 실패하는 경로의 정리는 아래 rename 실패 테스트가 본다.
+    //  여기서 `part_files(&dir)`를 보던 예전 단언은 엉뚱한 디렉터리를 훑고 있어,
+    //  정리 코드를 통째로 지워도 통과하는 공허한 단언이었다.)
+    assert!(
+        !dest.parent().unwrap().exists(),
+        "실패 경로에 디렉터리가 생기면 안 된다"
+    );
     assert!(
         part_files(&dir).is_empty(),
-        "실패했으면 임시 파일도 지워야 한다: {:?}",
+        "원본 옆에는 아무것도 남으면 안 된다: {:?}",
         part_files(&dir)
+    );
+
+    drop(conn);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// APP_CONFIGS가 없는 파일에서 암호화를 켜려 하면 **백업을 뜨기 전에** 막아야 한다.
+///
+/// 이 순서가 뒤집히면 성공은 구조적으로 불가능한데(설정을 저장할 테이블이 없다)
+/// 평문 전체 사본만 디스크에 남는다. 게다가 매번 새 이름이라 누를 때마다 쌓인다.
+#[test]
+fn test_enable_encryption_on_old_file_leaves_no_plaintext_backup() {
+    let (conn, dir) = file_db_for_backup();
+    insert_student(&conn, 1, 1, 1, "홍길동");
+    conn.execute_batch("DROP TABLE APP_CONFIGS").unwrap();
+
+    let path_state = DbPathState(std::sync::Mutex::new(Some(dir.join("test.db"))));
+    let err = enable_encryption_impl(&conn, &crypto_state(None), &path_state, "password")
+        .unwrap_err();
+
+    assert!(err.contains("옛 형식"), "실제 오류: {err}");
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .filter(|n| n.contains("backup"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "실패할 것이 뻔한 작업이 평문 사본을 남겼다: {leftovers:?}"
     );
 
     drop(conn);

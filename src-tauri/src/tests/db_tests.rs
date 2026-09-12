@@ -284,3 +284,64 @@ fn test_constraint_err_passes_through_other_errors() {
     assert_ne!(msg, "중복입니다", "무관한 오류를 충돌 메시지로 바꾸면 안 된다");
     assert_eq!(msg, e.to_string(), "무관한 오류는 원문 그대로 넘겨야 한다");
 }
+
+/// 이 앱의 파일이 아니면 **1바이트도 건드리지 않고** 거부해야 한다.
+///
+/// 파일 대화상자는 확장자만 거른다. 통과시키면 그다음 단계들이 남의 DB에
+/// `user_version`을 쓰고(migrate) 그 옆에 사본까지 만든다(backup).
+#[test]
+fn test_open_rejects_a_database_that_is_not_ours() {
+    let path = temp_path("not_ours");
+    {
+        let other = rusqlite::Connection::open(&path).unwrap();
+        other
+            .execute_batch("CREATE TABLE Bookmarks (id INTEGER PRIMARY KEY);")
+            .unwrap();
+        other.pragma_update(None, "user_version", 7u32).unwrap();
+    }
+    let before = std::fs::read(&path).unwrap();
+
+    let result = db::open_existing(&path);
+
+    assert!(
+        matches!(result, Err(db::OpenError::NotAppDatabase { .. })),
+        "NotAppDatabase 예상, 실제: {:?}",
+        result.map(|_| ())
+    );
+    let message = db::open_existing(&path).unwrap_err().to_string();
+    assert!(
+        message.contains("학생부 파일이 아닙니다"),
+        "사용자가 읽을 수 있는 안내여야 한다: {message}"
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        before,
+        "거부한 파일을 건드리면 안 된다"
+    );
+
+    let _ = std::fs::remove_file(&path);
+}
+
+/// 첫 릴리즈 시절의 파일(APP_CONFIGS·치환·유의어 테이블이 없다)은 **열려야 한다.**
+///
+/// 핵심 테이블만 보고 판별하는 이유가 이것이다. 나중에 추가된 테이블까지 요구하면
+/// 옛 파일을 쓰던 사용자가 자기 파일을 열 방법을 잃는다.
+#[test]
+fn test_open_accepts_an_old_file_missing_later_tables() {
+    let path = temp_path("old_shape");
+    {
+        let conn = db::create_new(&path).unwrap();
+        conn.execute_batch(
+            "DROP TABLE APP_CONFIGS; DROP TABLE SynonymItem;              DROP TABLE SynonymGroup; DROP TABLE ReplaceRule;",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 0u32).unwrap();
+    }
+
+    assert!(
+        db::open_existing(&path).is_ok(),
+        "옛 파일은 열려야 한다"
+    );
+
+    let _ = std::fs::remove_file(&path);
+}

@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, OptionalExtension, Result};
 use std::path::Path;
 
 /// 현재 앱이 지원하는 스키마 버전.
@@ -187,10 +187,56 @@ pub fn create_new(db_path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-/// 기존 DB 파일 열기 — 버전 검사만 수행 (마이그레이션은 migrate_schema 커맨드에서 별도 실행)
+/// 어느 버전에서도 이 앱의 파일에 반드시 있는 테이블.
+///
+/// 파일 대화상자는 확장자만 거르므로 다른 프로그램의 `.db`나 잘려서 0바이트가 된
+/// 파일이 들어올 수 있다. 예전에는 `get_encryption_status`가 `APP_CONFIGS`를 찾지
+/// 못해 **우연히** 걸러냈는데, 그 조회는 이 앱의 옛 파일(v0)까지 같이 막았다.
+/// 우연에 기대지 않고 여기서 판별한다.
+///
+/// 목록에는 **첫 릴리즈부터 있던 테이블만** 넣는다. 나중에 추가된 것을 넣으면 옛
+/// 파일이 거부되고, 그건 사용자가 자기 파일을 잃는 것과 같다. 나중에 추가된
+/// 테이블을 메우는 일은 마이그레이션의 몫이다.
+const CORE_TABLES: &[&str] = &[
+    "Student",
+    "Area",
+    "Activity",
+    "AreaActivity",
+    "AreaStudent",
+    "ActivityRecord",
+    "ActivityRecordHistory",
+    "Snapshot",
+];
+
+/// 기존 DB 파일 열기 — 이 앱의 파일인지와 버전만 검사한다
+/// (마이그레이션은 migrate_schema 커맨드에서 별도 실행).
+///
+/// **여기서 거부한 파일은 1바이트도 건드리지 않는다.** 통과시키면 그다음 단계들이
+/// 남의 DB에 `user_version`을 쓰고 그 옆에 사본까지 만든다.
 pub fn open_existing(db_path: &Path) -> Result<Connection, OpenError> {
     let conn = Connection::open(db_path).map_err(OpenError::Db)?;
     conn.execute_batch("PRAGMA foreign_keys = ON;").map_err(OpenError::Db)?;
+
+    // 조회 실패를 "테이블 없음"으로 뭉개지 않는다. 잠긴 파일을 "남의 DB"라고
+    // 잘못 알리면 사용자가 멀쩡한 자기 파일을 의심하게 된다.
+    let mut missing: Vec<&str> = Vec::new();
+    for table in CORE_TABLES {
+        let found = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
+                [table],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(OpenError::Db)?
+            .is_some();
+        if !found {
+            missing.push(table);
+        }
+    }
+    if !missing.is_empty() {
+        return Err(OpenError::NotAppDatabase { missing: missing.join(", ") });
+    }
 
     let db_version = get_version(&conn).map_err(OpenError::Db)?;
 
@@ -208,6 +254,8 @@ pub enum OpenError {
     Db(rusqlite::Error),
     /// DB 파일이 현재 앱보다 상위 버전
     TooNew { db_version: u32, app_version: u32 },
+    /// 이 앱이 만든 학생부 파일이 아니다
+    NotAppDatabase { missing: String },
 }
 
 impl std::fmt::Display for OpenError {
@@ -218,6 +266,10 @@ impl std::fmt::Display for OpenError {
                 f,
                 "이 파일은 더 최신 버전의 앱에서 생성되었습니다. \
                  앱을 업데이트해주세요. (파일 버전: v{db_version}, 현재 앱: v{app_version})"
+            ),
+            OpenError::NotAppDatabase { missing } => write!(
+                f,
+                "이 프로그램에서 만든 학생부 파일이 아닙니다.                  다른 파일을 선택해주세요. (파일 안에 {missing} 정보가 없습니다)"
             ),
         }
     }

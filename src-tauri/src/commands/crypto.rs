@@ -548,6 +548,22 @@ pub(crate) fn enable_encryption_impl(
         return Err("이미 암호화가 활성화되어 있습니다.".to_string());
     }
 
+    // **백업을 뜨기 전에** 설정을 저장할 수 있는 파일인지 본다.
+    //
+    // APP_CONFIGS가 없는 파일에는 salt도 검증 토큰도 둘 곳이 없어 아래 트랜잭션이
+    // 반드시 실패한다. 그런데 백업이 먼저라, 순서를 이대로 두면 **평문 전체 사본만
+    // 디스크에 남기고** 실패한다. 성공은 구조적으로 불가능하므로 다시 눌러도 사본만
+    // 하나씩 쌓인다(`unique_backup_path`가 매번 새 이름을 준다).
+    //
+    // `is_encryption_enabled`는 이런 파일을 "암호화 안 씀"으로 보고 통과시킨다.
+    // 그래야 그 파일이 열리기 때문인데(db.rs 참고), 그 관대함이 여기까지 오면 안 된다.
+    if !crate::commands::config::has_app_configs(conn)? {
+        return Err(
+            "이 파일은 프로그램의 옛 형식이라 암호화 설정을 저장할 수 없습니다.              파일을 새로 만들어 내용을 옮기신 뒤 암호화를 켜주세요."
+                .to_string(),
+        );
+    }
+
     // 암호화 도중 실패하면 되돌릴 수 있도록 평문 상태를 복사해 둔다.
     // 성공하면 반드시 지운다 — 평문 사본이 DB 옆에 남으면 암호화를 켠 의미가 없다.
     let backup = backup_db_file(conn, db_path_state, "-pre-encrypt")?;

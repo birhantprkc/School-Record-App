@@ -39,15 +39,24 @@ export const useUpdateStore = defineStore('update', () => {
   async function checkUpdate() {
     // 이미 확인 중이면 새로 요청하지 않는다. 중복 요청이 서로의 결과를 덮어쓴다.
     if (status.value === 'checking') return
+
+    // 버전 조회(IPC)는 'checking'에 들어가기 전에 끝낸다. 아래 시간 제한은 fetch만
+    // 끊으므로, 이것을 안에 두면 IPC가 돌아오지 않을 때 '확인 중' 화면에 갇힌다.
+    try {
+      await loadCurrentVersion()
+    } catch {
+      status.value = 'error'
+      return
+    }
+
     status.value = 'checking'
 
     // 반드시 시간 제한을 둔다. 학교 망의 캡티브 포털·프록시는 연결만 받아 두고
     // 응답을 주지 않는 경우가 있는데, 그러면 '확인 중' 화면에서 영영 빠져나오지
-    // 못한다. 그 화면에는 버튼이 없어 재시도할 방법도 사라진다.
+    // 못한다. 그 화면에는 버튼이 하나도 없어 재시도할 방법까지 사라진다.
     const abort = new AbortController()
     const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS)
     try {
-      await loadCurrentVersion()
       const res = await fetch(RELEASES_API, {signal: abort.signal})
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
