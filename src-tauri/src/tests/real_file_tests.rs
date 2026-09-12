@@ -203,7 +203,9 @@ fn verify_real_user_files() {
                 },
                 Err(_) => {
                     println!("  잠금 상태 (REAL_DB_PASSWORD 미설정)");
-                    unverified.push(name.clone());
+                    unverified.push(format!(
+                        "{name} — 잠금 상태. REAL_DB_PASSWORD를 설정하면 변환까지 검증한다"
+                    ));
                     false
                 }
             }
@@ -260,10 +262,14 @@ fn verify_real_user_files() {
                     match resolve_data_key(conn, &crypto) {
                         Ok(Some(key)) => {
                             let mut bad = 0usize;
+                            let mut doubled = 0usize;
                             let mut total = 0usize;
-                            for (table, column) in
-                                [("ActivityRecordHistory", "note"), ("Snapshot", "memo")]
-                            {
+
+                            // 검사 대상을 손으로 적지 않는다. 적어 두면 다음에 암호화
+                            // 컬럼이 늘었을 때 조용히 낡고, 이 하니스는 초록인 채로
+                            // 새 컬럼을 한 번도 보지 않는다.
+                            for spec in crate::commands::crypto::ENCRYPTED_COLUMNS {
+                                let (table, column) = (spec.table, spec.column);
                                 let sql =
                                     format!("SELECT {column} FROM {table} WHERE {column} IS NOT NULL");
                                 let mut stmt = conn.prepare(&sql).unwrap();
@@ -272,21 +278,41 @@ fn verify_real_user_files() {
                                     .unwrap()
                                     .filter_map(|r| r.ok());
                                 for v in values {
-                                    total += 1;
                                     if v.is_empty() {
                                         continue;
                                     }
-                                    if crate::crypto::decrypt(&v, &key).is_err() {
-                                        bad += 1;
+                                    total += 1;
+                                    match crate::crypto::decrypt(&v, &key) {
+                                        Err(_) => bad += 1,
+                                        // 이중 암호화는 복호화가 **성공**한다. 한 번 더
+                                        // 풀리면 안쪽도 암호문이었다는 뜻이다. 실패 건수만
+                                        // 세면 이 사고를 구조적으로 볼 수 없다.
+                                        Ok(plain) => {
+                                            if crate::crypto::decrypt(&plain, &key).is_ok() {
+                                                doubled += 1;
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            println!("  메모 복호화: {}/{total} 성공", total - bad);
+                            println!(
+                                "  암호화 컬럼 복호화: {}/{total} 성공 (이중 암호화 {doubled}건)",
+                                total - bad
+                            );
                             if bad != 0 {
-                                fail(&name, format!("메모 {bad}건이 복호화되지 않음"));
+                                fail(&name, format!("{bad}건이 복호화되지 않음"));
+                            }
+                            if doubled != 0 {
+                                fail(&name, format!("{doubled}건이 이중으로 암호화됨"));
+                            }
+                            // 검사할 값이 한 건도 없었으면 통과시킬 근거가 없다.
+                            // 그대로 "전 파일 통과"로 세면 그게 거짓말이 된다.
+                            if total == 0 {
+                                unverified
+                                    .push(format!("{name} — 암호화 컬럼에 값이 하나도 없다"));
                             }
                         }
-                        Ok(None) => println!("  메모 복호화 검사 건너뜀 (키 없음)"),
+                        Ok(None) => println!("  복호화 검사 건너뜀 (키 없음)"),
                         Err(e) => {
                             println!("  [FAIL] 데이터 키 조회: {e}");
                             fail(&name, format!("resolve_data_key: {e}"));
@@ -402,8 +428,7 @@ fn verify_real_user_files() {
         // 이 목록을 출력하지 않으면 "전 파일 통과"가 거짓말이 된다.
         // 암호화된 v1 파일의 메모 변환이야말로 이번 변경의 위험 지점이다.
         println!(
-            "메모 변환을 검증하지 못한 파일 {}개 (잠금 상태). \
-             REAL_DB_PASSWORD를 설정하면 이 경로까지 검증한다:",
+            "변환 결과를 검증하지 못한 파일 {}개 — 이 파일들은 통과로 세면 안 된다:",
             unverified.len()
         );
         for f in &unverified {

@@ -110,7 +110,14 @@ fn make_v1_encrypted(
     enable_encryption_impl(conn, crypto, path_state, password).unwrap();
     let key = resolve_data_key(conn, crypto).unwrap().unwrap();
 
-    for (table, column) in [("ActivityRecordHistory", "note"), ("Snapshot", "memo")] {
+    // v1 파일은 "since_version이 1인 컬럼만 암호문"인 상태다. 목록을 손으로 적으면
+    // 다음에 컬럼이 늘었을 때 픽스처가 조용히 낡아, 그 컬럼을 평문으로 되돌리지 않은
+    // 채 "v1 파일"이라고 부르게 된다 — 그러면 변환 테스트가 그 컬럼을 보지 않는다.
+    for spec in crate::commands::crypto::ENCRYPTED_COLUMNS
+        .iter()
+        .filter(|c| c.since_version > 1)
+    {
+        let (table, column) = (spec.table, spec.column);
         for (id, value) in raw_col(conn, table, column) {
             let Some(value) = value else { continue };
             let plain = decrypt(&value, &key).unwrap();
@@ -362,7 +369,14 @@ fn test_writes_after_migration_do_not_block_disable() {
     // 마이그레이션 이후 새로 쓰는 메모들 — 화면에서 오는 모든 경로를 흉내낸다.
     crate::commands::record::upsert_record_impl(&conn, act, stu, "내용을 고침", key).unwrap();
     save_snapshot_internal(&conn, act, stu, Some("마이그레이션 뒤 메모"), key).unwrap();
-    create_snapshot_impl(&conn, Some("마이그레이션 뒤 스냅샷".to_string()), key).unwrap();
+    // 반환값도 본다. 프론트엔드는 이 값을 그대로 목록에 꽂으므로, 저장한 암호문을
+    // 돌려주면 사용자 화면에 `nonce:cipher`가 그대로 뜬다.
+    let created = create_snapshot_impl(&conn, Some("마이그레이션 뒤 스냅샷".to_string()), key).unwrap();
+    assert_eq!(
+        created.memo.as_deref(),
+        Some("마이그레이션 뒤 스냅샷"),
+        "만든 직후 목록에 보여줄 값은 평문이어야 한다"
+    );
 
     // 여기가 핵심 — 평문이 하나라도 섞였다면 복호화가 실패해 Err가 된다.
     disable_encryption_impl(&conn, &crypto, &path_state).unwrap();
@@ -454,8 +468,10 @@ fn test_import_and_replace_notes_are_encrypted() {
 
 #[test]
 fn test_migration_marks_purge_when_rows_change() {
-    // 표시는 데이터 변경과 **같은 트랜잭션** 안에 들어가야 한다. 커밋 직후 죽어도
-    // 표시가 파일에 남아야 다음 열기에 정리를 이어받을 수 있기 때문이다.
+    // 변환 함수가 **스스로** 정리 표시를 남기는지 본다. 표시가 변경과 같은 커밋에
+    // 들어가는 것은 호출부 구조가 보장한다(db::migrate가 트랜잭션을 연다) — 그쪽은
+    // test_data_step_error_rolls_back_its_own_writes가 지킨다. 여기서 고정하는 것은
+    // "호출부가 따로 표시를 남겨 줘야 하는 게 아니다"라는 사실이다.
     let conn = setup_test_db();
     let (path_state, dir) = setup_temp_db_path_state();
     let crypto = crypto_state(None);
@@ -586,9 +602,7 @@ fn test_missing_app_configs_does_not_block_version_bump() {
     // 무심코 조회하면 그 테이블이 없는 파일은 버전조차 올라가지 못한다.
     //
     // 주장 범위는 여기까지다. 그런 파일이 **쓸 수 있게 된다**는 뜻이 아니다 —
-    // schema.sql은 db::create_new에서만 실행되므로 APP_CONFIGS는 끝내 생기지 않고,
-    // HomeView가 열기 직후 get_encryption_status를 부르므로 그런 파일은
-    // 마이그레이션에 닿기도 전에 열기부터 실패한다.
+    // schema.sql은 db::create_new에서만 실행되므로 APP_CONFIGS는 끝내 생기지 않는다.
     let conn = setup_test_db();
     conn.execute_batch("DROP TABLE APP_CONFIGS").unwrap();
     conn.pragma_update(None, "user_version", 0u32).unwrap();
@@ -599,6 +613,27 @@ fn test_missing_app_configs_does_not_block_version_bump() {
 
     assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_missing_app_configs_does_not_block_opening() {
+    // 위 테스트가 지키는 경로에 **도달할 수 있어야** 의미가 있다.
+    //
+    // 프론트엔드는 잠금 해제 여부를 정하려고 마이그레이션보다 먼저
+    // get_encryption_status를 부른다. 그 조회가 `no such table: APP_CONFIGS`로
+    // 실패하면, 마이그레이션이 v0 파일을 정식 지원해도 사용자는 거기에 닿지 못한 채
+    // 자기 파일을 열 방법을 잃는다. 이 순서는 뒤집을 수 없다 — 키를 쥔 채로 변환해야
+    // 하므로 잠금 해제가 먼저여야 한다. 그래서 조회 쪽이 v0를 견뎌야 한다.
+    let conn = setup_test_db();
+    conn.execute_batch("DROP TABLE APP_CONFIGS").unwrap();
+    conn.pragma_update(None, "user_version", 0u32).unwrap();
+
+    let status = crate::commands::crypto::get_encryption_status_impl(&conn, &crypto_state(None))
+        .expect("APP_CONFIGS가 없어도 상태 조회는 성공해야 한다");
+
+    assert!(!status.enabled, "암호화 기능이 생기기 전 파일이다");
+    assert!(!status.unlocked);
+    assert!(!status.purge_pending, "표시를 남긴 적이 없는 파일이다");
 }
 
 // ── 실제 파일에 평문이 남는가 ────────────────────────────────
@@ -867,4 +902,35 @@ fn test_enabling_encryption_after_migration_leaves_no_plaintext_in_the_file() {
         "암호화를 켠 뒤에도 파일 안에 평문 메모가 남아 있다"
     );
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_data_step_runs_with_foreign_keys_off_and_restores_it() {
+    // 마이그레이션은 외래키를 끈 채로 돈다. 테이블을 새로 만들어 옮기는 단계가 처음
+    // 생기는 순간, 켜져 있으면 옮기는 중간 상태에서 걸려 넘어진다.
+    //
+    // 지금은 DDL 단계가 없어 `PRAGMA foreign_keys = OFF`를 지워도 아무 테스트가
+    // 실패하지 않는다. 복구(`= ON`)만 단언돼 있고 끄는 쪽은 무방비였다.
+    let mut conn = setup_test_db();
+    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+    conn.pragma_update(None, "user_version", 0u32).unwrap();
+
+    let steps = std::cell::Cell::new(0u32);
+    db::migrate(&mut conn, 0, &|tx, _to| {
+        let on: i64 = tx.query_row("PRAGMA foreign_keys", [], |r| r.get(0)).unwrap();
+        assert_eq!(on, 0, "마이그레이션 중에는 외래키가 꺼져 있어야 한다");
+        steps.set(steps.get() + 1);
+        Ok(())
+    })
+    .unwrap();
+
+    assert_eq!(
+        steps.get(),
+        db::SCHEMA_VERSION,
+        "버전 단계마다 훅이 한 번씩 돌아야 한다"
+    );
+    let restored: i64 = conn
+        .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(restored, 1, "끝나면 외래키를 다시 켜야 한다");
 }

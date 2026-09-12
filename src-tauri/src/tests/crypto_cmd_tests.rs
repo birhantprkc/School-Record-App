@@ -7,7 +7,7 @@ use crate::commands::crypto::{
     change_encryption_password_impl, combine_all, disable_encryption_impl, enable_encryption_impl,
     get_encryption_status_impl, is_purge_pending, purge_free_pages, resolve_data_key,
     resume_pending_purge, retry_pending_purge_impl, unlock_encryption_impl,
-    with_purge_marked_transaction,
+    vacuum_into_backup, with_purge_marked_transaction,
 };
 use crate::commands::record::{
     bulk_import_records_impl, get_area_grid_impl, get_record_history_impl,
@@ -2705,5 +2705,113 @@ fn test_disable_encryption_backup_is_valid_and_readable() {
         .unwrap();
     assert_eq!(cnt, 1, "백업에 데이터가 실려 있어야 한다");
 
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+// ── 백업의 임시 이름(.part) ───────────────────────────────────────
+//
+// `vacuum_into_backup`은 완성 전 이름으로 쓰고 성공해야 최종 이름으로 옮긴다.
+// 이 방어에는 테스트가 없었다 — `.part`를 빼고 바로 최종 이름으로 쓰도록 되돌려도
+// 전 테스트가 통과했다. 백업을 보는 테스트가 전부 성공 경로만 탔기 때문이다.
+
+/// 파일 DB 하나를 임시 디렉터리에 만든다. 반환한 디렉터리는 호출부가 지운다.
+fn file_db_for_backup() -> (Connection, std::path::PathBuf) {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "school_record_backup_part_{}_{}",
+        std::process::id(),
+        nanos
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("test.db");
+    let conn = crate::db::create_new(&path).unwrap();
+    (conn, dir)
+}
+
+/// 디렉터리에 남은 `.part` 파일. 성공하든 실패하든 하나도 없어야 한다.
+fn part_files(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".part"))
+        .collect()
+}
+
+#[test]
+fn test_backup_leaves_only_the_final_name_on_success() {
+    let (conn, dir) = file_db_for_backup();
+    insert_activity(&conn, "발표");
+    let dest = dir.join("out.db.backup");
+
+    vacuum_into_backup(&conn, &dest).unwrap();
+
+    assert!(dest.exists(), "최종 이름의 백업이 있어야 한다");
+    assert!(
+        part_files(&dir).is_empty(),
+        "성공했으면 임시 파일이 남으면 안 된다: {:?}",
+        part_files(&dir)
+    );
+
+    // 옮겨진 파일이 실제로 열리는 DB인지까지 본다. 이름만 맞고 내용이 반쪽이면
+    // 정작 복구하려는 순간에야 알게 된다.
+    let restored = Connection::open(&dest).unwrap();
+    let cnt: i64 = restored
+        .query_row("SELECT COUNT(*) FROM Activity", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cnt, 1);
+
+    drop(restored);
+    drop(conn);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn test_backup_leaves_nothing_behind_when_it_cannot_be_written() {
+    let (conn, dir) = file_db_for_backup();
+    // 없는 디렉터리 안을 가리키면 VACUUM INTO 단계에서 실패한다.
+    let dest = dir.join("no_such_dir").join("out.db.backup");
+
+    let err = vacuum_into_backup(&conn, &dest).unwrap_err();
+
+    assert!(err.contains("백업 생성 실패"), "실제 오류: {err}");
+    assert!(!dest.exists(), "실패했는데 최종 이름이 남으면 안 된다");
+    assert!(
+        part_files(&dir).is_empty(),
+        "실패했으면 임시 파일도 지워야 한다: {:?}",
+        part_files(&dir)
+    );
+
+    drop(conn);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// **임시 이름을 거친다는 사실 자체**를 고정한다.
+///
+/// 최종 이름 자리에 디렉터리를 둔다. 임시 이름으로 먼저 쓰면 VACUUM은 성공하고
+/// 그 다음 rename에서 넘어지므로 오류가 "이름을 바꾸지 못했습니다"가 된다.
+/// `.part`를 지우고 바로 최종 이름으로 쓰도록 되돌리면 VACUUM 자체가 실패해
+/// "백업 생성 실패"가 나온다 — 그래서 이 단언이 그 변이를 잡는다.
+#[test]
+fn test_backup_is_written_under_a_temporary_name_first() {
+    let (conn, dir) = file_db_for_backup();
+    let dest = dir.join("out.db.backup");
+    std::fs::create_dir(&dest).unwrap();
+
+    let err = vacuum_into_backup(&conn, &dest).unwrap_err();
+
+    assert!(
+        err.contains("이름을 바꾸지 못했습니다"),
+        "임시 이름으로 먼저 쓰지 않았다. 실제 오류: {err}"
+    );
+    assert!(
+        part_files(&dir).is_empty(),
+        "옮기지 못했으면 임시 파일을 지워야 한다: {:?}",
+        part_files(&dir)
+    );
+
+    drop(conn);
     std::fs::remove_dir_all(&dir).ok();
 }

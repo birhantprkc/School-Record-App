@@ -160,7 +160,7 @@ fn test_migration_path_matches_fresh_install() {
         // 이 테스트가 보는 것은 스키마의 **모양**이다. 데이터 변환은 지문에 영향을 주지
         // 않으므로 여기서는 아무것도 하지 않는 훅을 넘긴다.
         // 프로덕션 경로(migrate_schema_impl)는 암호화 키를 받는 훅을 넘긴다 — 그쪽이
-        // no-op으로 도는 일이 없는지는 crypto_cmd_tests의 마이그레이션 테스트가 본다.
+        // no-op으로 도는 일이 없는지는 migration_v2_tests가 본다.
         db::migrate(&mut conn, version, &|_, _| Ok(())).unwrap();
 
         assert_eq!(
