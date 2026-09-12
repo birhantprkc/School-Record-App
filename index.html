@@ -30,25 +30,13 @@
         pointer-events: none;
       }
 
+      /* 앱 아이콘을 그대로 쓴다. 아이콘이 자기 배경과 라운드(22%)를 가지고 있으므로
+         여기서는 홈 화면(.logo-icon)과 같은 그림자만 얹는다. */
       .loading-logo {
         width: 68px;
         height: 68px;
-        border-radius: 14px;
-        background: linear-gradient(135deg, #3b5bdb, #4c6ef5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 0 32px rgba(99, 102, 241, 0.25);
-      }
-
-      .loading-logo svg {
-        width: 34px;
-        height: 34px;
-        stroke: white;
-        fill: none;
-        stroke-width: 1.8;
-        stroke-linecap: round;
-        stroke-linejoin: round;
+        border-radius: 15px;
+        box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 8px 32px rgba(76, 110, 245, 0.35);
       }
 
       .loading-spinner {
@@ -75,11 +63,7 @@
   <body>
     <!-- Vue 마운트 전 표시되는 로딩 화면 -->
     <div id="app-loading">
-      <div class="loading-logo">
-        <svg viewBox="0 0 24 24">
-          <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-      </div>
+      <img class="loading-logo" src="/app-icon.svg" alt="">
       <div class="loading-spinner"></div>
       <span class="loading-text">Loading...</span>
     </div>

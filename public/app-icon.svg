@@ -5,6 +5,7 @@
     이 파일 하나가 원본이다. 쓰이는 곳:
       · 홈 화면 로고   src/views/HomeView.vue  (img src="/app-icon.svg")
       · 파비콘         index.html
+      · 로딩 화면      index.html  (#app-loading, Vue 마운트 전)
       · 플랫폼 아이콘  src-tauri/icons/*
 
     플랫폼 아이콘 재생성: 이 파일을 1024px PNG로 구운 뒤 `npx tauri icon <png>`.
