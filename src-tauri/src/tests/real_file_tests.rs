@@ -11,7 +11,7 @@
 
 use crate::commands::activity::get_activities_impl;
 use crate::commands::area::{create_area_impl, delete_area_impl, get_areas_impl};
-use crate::commands::crypto::is_encryption_enabled;
+use crate::commands::crypto::{is_encryption_enabled, resolve_data_key, unlock_encryption_impl};
 use crate::commands::project::{migrate_schema_impl, open_project_impl};
 use crate::commands::student::get_students_impl;
 use crate::state::{
@@ -26,6 +26,16 @@ const PROBE: &str = "__pr29_write_probe__";
 /// (복제해 두면 스키마가 v2로 올라갈 때 조용히 낡는다.)
 fn expected_fingerprint() -> &'static str {
     super::schema_lock_tests::SCHEMA_FINGERPRINTS[(crate::db::SCHEMA_VERSION - 1) as usize]
+}
+
+/// 지정 버전의 고정 지문. 버전 도입 이전(v0) 파일은 기록이 없으므로 None.
+fn baseline_fingerprint(version: u32) -> Option<&'static str> {
+    if version == 0 {
+        return None;
+    }
+    super::schema_lock_tests::SCHEMA_FINGERPRINTS
+        .get((version - 1) as usize)
+        .copied()
 }
 
 /// 파일 헤더 오프셋 96: 이 파일을 마지막으로 쓴 SQLite 라이브러리 버전
@@ -96,6 +106,8 @@ fn verify_real_user_files() {
     assert!(!files.is_empty(), "db 파일이 없습니다: {src_dir}");
 
     let mut failures: Vec<String> = Vec::new();
+    // 잠겨 있어 변환까지는 확인하지 못한 파일들. 조용히 넘기면 "전부 통과"로 읽힌다.
+    let mut unverified: Vec<String> = Vec::new();
     let mut fail = |name: &str, what: String| failures.push(format!("{name} — {what}"));
 
     for (i, src) in files.iter().enumerate() {
@@ -161,13 +173,43 @@ fn verify_real_user_files() {
             "  열었을 때 user_version: {uv_before} (앱 SCHEMA_VERSION: {})",
             crate::db::SCHEMA_VERSION
         );
-        match is_encryption_enabled(conn) {
-            Ok(v) => println!("  암호화 사용: {v}"),
+        let encrypted = match is_encryption_enabled(conn) {
+            Ok(v) => {
+                println!("  암호화 사용: {v}");
+                v
+            }
             Err(e) => {
                 println!("  [FAIL] 암호화 설정 조회: {e}");
                 fail(&name, format!("is_encryption_enabled: {e}"));
+                false
             }
-        }
+        };
+
+        // 암호화된 파일은 키가 있어야 마이그레이션이 돈다(v1→v2는 메모를 암호화한다).
+        // REAL_DB_PASSWORD를 주면 잠금을 풀고 변환까지 검증한다. 없으면 아래 5)에서
+        // "잠금이라 보류"로 판정하고, 무엇을 검증하지 못했는지 마지막에 알린다.
+        let unlocked = if encrypted {
+            match std::env::var("REAL_DB_PASSWORD") {
+                Ok(pw) => match unlock_encryption_impl(conn, &crypto, &pw) {
+                    Ok(()) => {
+                        println!("  [OK]   unlock_encryption");
+                        true
+                    }
+                    Err(e) => {
+                        println!("  [FAIL] unlock_encryption: {e}");
+                        fail(&name, format!("unlock: {e}"));
+                        false
+                    }
+                },
+                Err(_) => {
+                    println!("  잠금 상태 (REAL_DB_PASSWORD 미설정)");
+                    unverified.push(name.clone());
+                    false
+                }
+            }
+        } else {
+            false
+        };
 
         // 4) 데이터 규모
         print!("  행 수:");
@@ -187,7 +229,7 @@ fn verify_real_user_files() {
         //    이 하니스의 존재 이유가 여기다: 번들 SQLite가 올라가면서 sqlite_master
         //    텍스트 표기가 달라지면 실제 파일의 지문이 고정 지문과 어긋난다.
         //    이걸 출력만 하고 통과시키면 하니스가 있으나 마나다.
-        match migrate_schema_impl(conn) {
+        match migrate_schema_impl(conn, &crypto, &path_state) {
             Ok(()) => {
                 let uv_after: u32 = conn
                     .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -209,6 +251,68 @@ fn verify_real_user_files() {
                     println!("    기대: {expected}");
                     println!("    실제: {fp}");
                     fail(&name, "스키마 지문 불일치".into());
+                }
+
+                // 이번 변경의 핵심이 여기다. user_version과 지문만 보면 "버전은 올랐는데
+                // 메모는 평문"인 결과를 통과시킨다. 실제로 복호화해 본다.
+                // 개인정보이므로 내용은 출력하지 않고 실패 건수만 센다.
+                if unlocked {
+                    match resolve_data_key(conn, &crypto) {
+                        Ok(Some(key)) => {
+                            let mut bad = 0usize;
+                            let mut total = 0usize;
+                            for (table, column) in
+                                [("ActivityRecordHistory", "note"), ("Snapshot", "memo")]
+                            {
+                                let sql =
+                                    format!("SELECT {column} FROM {table} WHERE {column} IS NOT NULL");
+                                let mut stmt = conn.prepare(&sql).unwrap();
+                                let values = stmt
+                                    .query_map([], |r| r.get::<_, String>(0))
+                                    .unwrap()
+                                    .filter_map(|r| r.ok());
+                                for v in values {
+                                    total += 1;
+                                    if v.is_empty() {
+                                        continue;
+                                    }
+                                    if crate::crypto::decrypt(&v, &key).is_err() {
+                                        bad += 1;
+                                    }
+                                }
+                            }
+                            println!("  메모 복호화: {}/{total} 성공", total - bad);
+                            if bad != 0 {
+                                fail(&name, format!("메모 {bad}건이 복호화되지 않음"));
+                            }
+                        }
+                        Ok(None) => println!("  메모 복호화 검사 건너뜀 (키 없음)"),
+                        Err(e) => {
+                            println!("  [FAIL] 데이터 키 조회: {e}");
+                            fail(&name, format!("resolve_data_key: {e}"));
+                        }
+                    }
+                }
+            }
+            Err(e) if encrypted && !unlocked => {
+                // 의도된 거부다. 키 없이 버전을 올리면 "v2인데 메모는 평문"인 파일이
+                // 남고 그건 복구가 안 된다. 실패로 세지 않는다.
+                println!("  [SKIP] migrate_schema (잠금): {e}");
+
+                // 다만 지문은 키와 무관하다(sqlite_master만 본다). 마이그레이션 전
+                // 버전 기준으로 비교하면 이 하니스의 본래 목적 — 번들 SQLite 교체로
+                // 실제 파일의 지문이 어긋나는지 — 은 그대로 확인할 수 있다.
+                match baseline_fingerprint(uv_before) {
+                    Some(expected) => {
+                        let fp = schema_fingerprint(conn);
+                        println!("  스키마 지문(v{uv_before} 기준) 일치: {}", fp == expected);
+                        if fp != expected {
+                            println!("    기대: {expected}");
+                            println!("    실제: {fp}");
+                            fail(&name, format!("스키마 지문 불일치 (v{uv_before})"));
+                        }
+                    }
+                    None => println!("  지문 비교 건너뜀 (v{uv_before}는 고정 지문이 없다)"),
                 }
             }
             Err(e) => {
@@ -292,6 +396,18 @@ fn verify_real_user_files() {
     std::fs::remove_dir_all(&work).ok();
 
     println!("\n===== 요약 =====");
+    if !unverified.is_empty() {
+        // 이 목록을 출력하지 않으면 "전 파일 통과"가 거짓말이 된다.
+        // 암호화된 v1 파일의 메모 변환이야말로 이번 변경의 위험 지점이다.
+        println!(
+            "메모 변환을 검증하지 못한 파일 {}개 (잠금 상태). \
+             REAL_DB_PASSWORD를 설정하면 이 경로까지 검증한다:",
+            unverified.len()
+        );
+        for f in &unverified {
+            println!("  - {f}");
+        }
+    }
     if failures.is_empty() {
         println!("전 파일 통과 ({}개)", files.len());
     } else {

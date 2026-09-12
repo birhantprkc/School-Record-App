@@ -11,7 +11,7 @@ fn test_create_snapshot_creates_history_for_records() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
     upsert_record_impl(&conn, act_id, stu_id, "훌륭한 발표", None).unwrap();
 
-    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM ActivityRecordHistory", [], |r| r.get(0))
@@ -26,8 +26,8 @@ fn test_create_snapshot_no_duplicate_same_updated_at() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
     upsert_record_impl(&conn, act_id, stu_id, "내용", None).unwrap();
 
-    create_snapshot_impl(&conn, None).unwrap();
-    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM ActivityRecordHistory", [], |r| r.get(0))
@@ -38,14 +38,14 @@ fn test_create_snapshot_no_duplicate_same_updated_at() {
 #[test]
 fn test_create_snapshot_empty_db_ok() {
     let conn = setup_test_db();
-    let result = create_snapshot_impl(&conn, Some("메모".to_string()));
+    let result = create_snapshot_impl(&conn, Some("메모".to_string()), None);
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_create_snapshot_returns_item_with_id() {
     let conn = setup_test_db();
-    let item = create_snapshot_impl(&conn, Some("테스트".to_string())).unwrap();
+    let item = create_snapshot_impl(&conn, Some("테스트".to_string()), None).unwrap();
     assert!(item.id > 0);
     assert!(!item.created_at.is_empty());
     assert_eq!(item.memo, Some("테스트".to_string()));
@@ -55,7 +55,7 @@ fn test_create_snapshot_returns_item_with_id() {
 fn test_create_snapshot_none_memo_returns_none() {
     let conn = setup_test_db();
 
-    let item = create_snapshot_impl(&conn, None).unwrap();
+    let item = create_snapshot_impl(&conn, None, None).unwrap();
 
     assert!(item.id > 0);
     assert!(item.memo.is_none(), "None으로 생성한 스냅샷의 memo는 None이어야 함");
@@ -66,14 +66,14 @@ fn test_create_snapshot_none_memo_returns_none() {
 #[test]
 fn test_get_snapshots_empty_db() {
     let conn = setup_test_db();
-    let items = get_snapshots_impl(&conn).unwrap();
+    let items = get_snapshots_impl(&conn, None).unwrap();
     assert!(items.is_empty());
 }
 
 #[test]
 fn test_get_snapshots_ordered_desc() {
     let conn = setup_test_db();
-    create_snapshot_impl(&conn, Some("첫번째".to_string())).unwrap();
+    create_snapshot_impl(&conn, Some("첫번째".to_string()), None).unwrap();
     // 동일 시각 방지를 위해 updated_at 강제 차이 — Snapshot.created_at은 DEFAULT datetime('now')
     // 두 INSERT 사이에 실제 시간 차이가 없을 수 있으므로 직접 삽입으로 보장
     conn.execute(
@@ -82,7 +82,7 @@ fn test_get_snapshots_ordered_desc() {
     )
     .unwrap();
 
-    let items = get_snapshots_impl(&conn).unwrap();
+    let items = get_snapshots_impl(&conn, None).unwrap();
     assert_eq!(items.len(), 2);
     assert_eq!(items[0].memo, Some("두번째".to_string()), "최신 스냅샷이 첫 번째여야 함");
 }
@@ -91,10 +91,10 @@ fn test_get_snapshots_ordered_desc() {
 fn test_get_snapshots_none_memo() {
     let conn = setup_test_db();
 
-    create_snapshot_impl(&conn, None).unwrap();
-    create_snapshot_impl(&conn, Some("메모있음".to_string())).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
+    create_snapshot_impl(&conn, Some("메모있음".to_string()), None).unwrap();
 
-    let items = get_snapshots_impl(&conn).unwrap();
+    let items = get_snapshots_impl(&conn, None).unwrap();
 
     assert_eq!(items.len(), 2);
     let none_count = items.iter().filter(|i| i.memo.is_none()).count();
@@ -112,7 +112,7 @@ fn test_restore_snapshot_reverts_content() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
     upsert_record_impl(&conn, act_id, stu_id, "초기 내용", None).unwrap();
 
-    let snap = create_snapshot_impl(&conn, None).unwrap();
+    let snap = create_snapshot_impl(&conn, None, None).unwrap();
 
     upsert_record_impl(&conn, act_id, stu_id, "수정된 내용", None).unwrap();
 
@@ -132,7 +132,7 @@ fn test_restore_snapshot_reverts_content() {
 fn test_restore_snapshot_sets_empty_when_no_history() {
     let conn = setup_test_db();
     // 빈 DB에서 스냅샷 생성 (히스토리 없음)
-    let snap = create_snapshot_impl(&conn, None).unwrap();
+    let snap = create_snapshot_impl(&conn, None, None).unwrap();
 
     // 스냅샷 이후에 기록 추가
     let act_id = insert_activity(&conn, "발표");
@@ -173,7 +173,7 @@ fn test_restore_returns_affected_row_count() {
     upsert_record_impl(&conn, act_id, stu1, "내용1", None).unwrap();
     upsert_record_impl(&conn, act_id, stu2, "내용2", None).unwrap();
 
-    let snap = create_snapshot_impl(&conn, None).unwrap();
+    let snap = create_snapshot_impl(&conn, None, None).unwrap();
     let count = restore_snapshot_impl(&conn, snap.id).unwrap();
 
     assert_eq!(count, 2, "기록 2개가 업데이트되어야 함");
@@ -278,7 +278,7 @@ fn test_snapshot_captures_current_content_despite_same_second_history() {
     set_updated_at(&conn, act, stu, "2026-01-01 09:00:00");
     insert_history_at(&conn, act, stu, "옛 내용", "2026-01-01 09:00:00");
 
-    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
 
     // 현재 내용이 히스토리에 반드시 담겨야 한다.
     let captured: i64 = conn
@@ -304,7 +304,7 @@ fn test_snapshot_does_not_relabel_stale_row_as_if_saved() {
     set_updated_at(&conn, act, stu, "2026-01-01 09:00:00");
     insert_history_at(&conn, act, stu, "옛 내용", "2026-01-01 09:00:00");
 
-    crate::commands::record::save_snapshot_internal(&conn, act, stu, Some("치환 적용 전")).unwrap();
+    crate::commands::record::save_snapshot_internal(&conn, act, stu, Some("치환 적용 전"), None).unwrap();
 
     // 옛 내용 행의 note를 덧씌우면, 저장하지 않은 것을 저장한 것처럼 보이게 된다.
     let mislabeled: i64 = conn
@@ -326,8 +326,8 @@ fn test_snapshot_still_dedupes_identical_content_at_same_time() {
     upsert_record_impl(&conn, act, stu, "그대로", None).unwrap();
 
     // 변경 없이 두 번 스냅샷하면 히스토리는 하나여야 한다(기존 동작 유지).
-    create_snapshot_impl(&conn, None).unwrap();
-    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM ActivityRecordHistory", [], |r| r.get(0))
@@ -377,7 +377,7 @@ fn test_restore_returns_current_content_after_same_second_aba() {
     assert_eq!(current, "A 내용", "가져오기 직후 현재 내용은 마지막 행이어야 한다");
 
     // 스냅샷을 찍고, 이후 내용을 바꾼 뒤 되돌린다.
-    let snap = create_snapshot_impl(&conn, Some("복원 기준".to_string())).unwrap();
+    let snap = create_snapshot_impl(&conn, Some("복원 기준".to_string()), None).unwrap();
     upsert_record_impl(&conn, act, stu, "그 뒤에 쓴 내용", None).unwrap();
     restore_snapshot_impl(&conn, snap.id).unwrap();
 
@@ -459,8 +459,8 @@ fn test_legacy_history_is_never_rewritten_by_new_logic() {
         .collect();
 
     // 스냅샷을 여러 번 찍어도 기존 행의 내용·시각은 절대 바뀌지 않아야 한다.
-    create_snapshot_impl(&conn, None).unwrap();
-    create_snapshot_impl(&conn, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
+    create_snapshot_impl(&conn, None, None).unwrap();
 
     let after: Vec<(i64, String, String)> = conn
         .prepare("SELECT id, content, changed_at FROM ActivityRecordHistory WHERE id <= ?1 ORDER BY id")

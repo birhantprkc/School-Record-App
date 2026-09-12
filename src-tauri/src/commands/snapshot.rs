@@ -1,10 +1,20 @@
+use crate::commands::crypto::resolve_data_key;
+use crate::crypto::{maybe_decrypt, maybe_encrypt};
 use crate::db::with_transaction;
-use crate::state::DbState;
+use crate::state::{CryptoStateHandle, DbState};
 use crate::types::SnapshotItem;
 use rusqlite::Connection;
 use tauri::State;
 
-pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<SnapshotItem, String> {
+/// `memo`는 평문으로 받는다. 저장은 암호화해서 하고, 반환하는 SnapshotItem에는
+/// 평문을 그대로 담는다 — 프론트엔드가 이 값을 목록에 바로 꽂기 때문이다.
+pub fn create_snapshot_impl(
+    conn: &Connection,
+    memo: Option<String>,
+    key: Option<[u8; 32]>,
+) -> Result<SnapshotItem, String> {
+    let stored_memo = memo.as_deref().map(|m| maybe_encrypt(m, key)).transpose()?;
+
     with_transaction(conn, || {
         conn.execute(
             "INSERT INTO ActivityRecordHistory (activity_record_id, content, changed_at, note)
@@ -22,7 +32,7 @@ pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<S
 
         conn.execute(
             "INSERT INTO Snapshot (memo) VALUES (?1)",
-            rusqlite::params![memo],
+            rusqlite::params![stored_memo],
         )
         .map_err(|e| e.to_string())?;
 
@@ -39,23 +49,36 @@ pub fn create_snapshot_impl(conn: &Connection, memo: Option<String>) -> Result<S
     })
 }
 
-pub fn get_snapshots_impl(conn: &Connection) -> Result<Vec<SnapshotItem>, String> {
+pub fn get_snapshots_impl(
+    conn: &Connection,
+    key: Option<[u8; 32]>,
+) -> Result<Vec<SnapshotItem>, String> {
     let mut stmt = conn
         .prepare("SELECT id, memo, created_at FROM Snapshot ORDER BY created_at DESC")
         .map_err(|e| e.to_string())?;
 
-    let items = stmt
+    // 복호화는 query_map 클로저 밖에서 한다. 그 안은 rusqlite::Error만 돌려줄 수 있어
+    // 복호화 실패를 그대로 올릴 수 없다.
+    let raw = stmt
         .query_map([], |row| {
-            Ok(SnapshotItem {
-                id: row.get(0)?,
-                memo: row.get(1)?,
-                created_at: row.get(2)?,
-            })
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
+    let mut items = Vec::with_capacity(raw.len());
+    for (id, memo, created_at) in raw {
+        items.push(SnapshotItem {
+            id,
+            memo: memo.map(|m| maybe_decrypt(m, key)).transpose()?,
+            created_at,
+        });
+    }
     Ok(items)
 }
 
@@ -97,21 +120,27 @@ pub fn restore_snapshot_impl(conn: &Connection, snapshot_id: i64) -> Result<i64,
 pub fn create_snapshot(
     memo: Option<String>,
     state: State<DbState>,
+    crypto: State<CryptoStateHandle>,
 ) -> Result<SnapshotItem, String> {
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
-    create_snapshot_impl(conn, memo)
+    let key = resolve_data_key(conn, &crypto)?;
+    create_snapshot_impl(conn, memo, key)
 }
 
 #[tauri::command]
-pub fn get_snapshots(state: State<DbState>) -> Result<Vec<SnapshotItem>, String> {
+pub fn get_snapshots(
+    state: State<DbState>,
+    crypto: State<CryptoStateHandle>,
+) -> Result<Vec<SnapshotItem>, String> {
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
-    get_snapshots_impl(conn)
+    let key = resolve_data_key(conn, &crypto)?;
+    get_snapshots_impl(conn, key)
 }
 
 #[tauri::command]

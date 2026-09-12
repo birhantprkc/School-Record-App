@@ -10,15 +10,23 @@ use std::path::Path;
 ///   3. tests/schema_history/vN.sql 스냅샷을 추가한다 (기존 파일은 수정 금지).
 /// 이를 빠뜨리면 `tests/schema_lock_tests.rs`가 실패한다. 상세 절차는 해당 파일 참고.
 ///
+/// **DDL이 그대로여도 버전을 올려야 하는 경우가 있다.** `ENCRYPTED_COLUMNS`에 컬럼을
+/// 넣거나 빼면 테이블 모양은 같은데 그 컬럼에 담긴 값의 표현이 달라진다. 어느 파일이
+/// 이미 변환됐는지 구분할 표식이 필요하고, user_version이 그 표식이다. v2가 그 예다.
+/// (빼는 쪽은 대응하는 복호화 훅이 아직 없다 — commands/crypto.rs 참고)
+///
 /// 중요: 스키마 버전을 올릴 때는 반드시 tauri.conf.json의 version(app_version)도 함께 올려야 한다.
 /// app_version이 바뀌지 않으면 릴리즈 노트 모달이 표시되지 않는다.
 /// (Cargo.toml의 version은 0.0.0 고정 — 실제 앱 버전은 tauri.conf.json이 기준이다)
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// 인덱스 i: 버전 i → i+1 로 올리는 SQL.
 /// [0] v0→v1: 버전 도입 이전 DB를 v1으로 승격. 스키마는 IF NOT EXISTS로 생성되어 있으므로 SQL 없음.
+/// [1] v1→v2: DDL 변경 없음. ActivityRecordHistory.note / Snapshot.memo가 암호화 대상이 된
+///            데이터 표현 변경이며, 그 변환은 SQL로 할 수 없어 `migrate`의 data_step으로 간다.
 pub(crate) const MIGRATIONS: &[&str] = &[
     "", // v0 → v1
+    "", // v1 → v2
 ];
 
 /// BEGIN ~ COMMIT/ROLLBACK을 감싸 트랜잭션이 열린 채 남지 않도록 보장한다.
@@ -56,59 +64,88 @@ fn get_version(conn: &Connection) -> Result<u32> {
     conn.query_row("PRAGMA user_version", [], |r| r.get(0))
 }
 
+/// 마이그레이션 한 단계에서 실행할 데이터 변환.
+///
+/// 인자는 (그 단계의 트랜잭션, 올라갈 목표 버전)이다. **버전 승격과 같은 트랜잭션 안에서**
+/// 호출되므로, Err를 돌려주면 데이터 변환과 user_version 승격이 함께 롤백된다.
+///
+/// 이 훅이 있는 이유는 SQL만으로 할 수 없는 변환이 있기 때문이다. 암호화 키가 필요한
+/// 변환이 그렇다. **키가 필요한 단계에 아무것도 하지 않는 훅을 넘기면, 옛 표현의 데이터를
+/// 담은 채 버전만 오른 파일이 만들어진다.** 그 파일은 다음에 열릴 때 새 표현으로 읽히므로
+/// 복구가 안 된다. 프로덕션 경로는 commands/project.rs의 migrate_schema_impl 하나뿐이다.
+pub type MigrationDataStep<'a> = &'a dyn Fn(&Connection, u32) -> Result<(), String>;
+
 /// 현재 버전에서 SCHEMA_VERSION까지 마이그레이션을 단계별로 실행한다.
 /// - 각 단계는 rusqlite Transaction으로 감싸 실패 시 자동 ROLLBACK된다.
+/// - DDL → `data_step` → user_version 승격이 **한 트랜잭션**이다.
 /// - foreign_keys는 트랜잭션 외부에서만 변경 가능하므로, IIFE 종료 후 복구한다.
 /// - 각 단계 커밋 전 PRAGMA foreign_key_check로 무결성을 검증한다.
-pub fn migrate(conn: &mut Connection, from: u32) -> Result<()> {
+pub fn migrate(
+    conn: &mut Connection,
+    from: u32,
+    data_step: MigrationDataStep<'_>,
+) -> Result<(), String> {
     // foreign_keys 변경은 트랜잭션 외부에서만 유효 (SQLite 공식 권고)
-    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")
+        .map_err(|e| e.to_string())?;
 
     // IIFE로 마이그레이션 실행 — 성공·실패 모두 이후 foreign_keys = ON 복구 보장
-    let result: Result<()> = (|| {
+    let result: Result<(), String> = (|| {
         for v in from..SCHEMA_VERSION {
             let idx = v as usize;
-            let sql = MIGRATIONS.get(idx).copied().ok_or_else(|| {
-                rusqlite::Error::InvalidParameterName(
-                    format!("마이그레이션 스크립트 누락: v{v} → v{}", v + 1),
-                )
-            })?;
+            let sql = MIGRATIONS
+                .get(idx)
+                .copied()
+                .ok_or_else(|| format!("마이그레이션 스크립트 누락: v{v} → v{}", v + 1))?;
 
             // Transaction: 스코프 이탈(에러 포함) 시 자동 ROLLBACK
-            let tx = conn.transaction()?;
+            let tx = conn.transaction().map_err(|e| e.to_string())?;
 
             if !sql.is_empty() {
-                tx.execute_batch(sql)?;
+                tx.execute_batch(sql).map_err(|e| e.to_string())?;
             }
 
+            // 데이터 변환은 아래 user_version 승격과 한 커밋으로 묶인다.
+            // 순서를 뒤집어 버전을 먼저 올리면, 변환이 실패했을 때 "새 버전인데
+            // 데이터는 옛 표현"인 파일이 남는다.
+            data_step(&tx, v + 1)?;
+
             // user_version을 pragma_update API로 설정 (format! 없이 안전하게)
-            tx.pragma_update(None, "user_version", v + 1)?;
+            tx.pragma_update(None, "user_version", v + 1)
+                .map_err(|e| e.to_string())?;
 
             // 커밋 전 외래키 무결성 검증 — 위반 행이 하나라도 있으면 롤백
             {
-                let mut stmt = tx.prepare("PRAGMA foreign_key_check;")?;
-                if stmt.exists([])? {
-                    return Err(rusqlite::Error::SqliteFailure(
-                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
-                        Some(format!(
-                            "v{v} → v{} 마이그레이션 후 외래키 무결성 위반",
-                            v + 1
-                        )),
+                let mut stmt = tx
+                    .prepare("PRAGMA foreign_key_check;")
+                    .map_err(|e| e.to_string())?;
+                if stmt.exists([]).map_err(|e| e.to_string())? {
+                    return Err(format!(
+                        "v{v} → v{} 마이그레이션 후 외래키 무결성 위반",
+                        v + 1
                     ));
                 }
             }
 
-            tx.commit()?;
+            tx.commit().map_err(|e| e.to_string())?;
         }
         Ok(())
     })();
 
     // 트랜잭션이 모두 닫힌 후 복구 — 열린 트랜잭션이 없으므로 PRAGMA가 반드시 적용됨
     // 복구 실패 시 conn이 foreign_keys = OFF 상태로 남으므로 에러로 처리
-    let fk_result = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    let fk_result = conn
+        .execute_batch("PRAGMA foreign_keys = ON;")
+        .map_err(|e| e.to_string());
 
-    // 마이그레이션 에러 우선, 복구 에러는 마이그레이션 성공 시에만 반환
-    result.and(fk_result)
+    // 둘 다 실패하면 `Result::and`는 복구 실패를 버린다. 그러면 커넥션이 세션 내내
+    // foreign_keys = OFF로 남아 CASCADE가 안 도는데 아무도 모른다. 합쳐서 올린다.
+    match (result, fk_result) {
+        (Ok(()), fk) => fk,
+        (Err(e), Ok(())) => Err(e),
+        (Err(e), Err(fk)) => Err(format!("{e}
+외래키 설정 복구에도 실패했습니다: {fk}")),
+    }
 }
 
 // ── 공개 API ─────────────────────────────────────────────────

@@ -46,27 +46,68 @@ enum DataTransform {
     Decrypt,
 }
 
-struct EncryptedColumn {
-    table: &'static str,
-    column: &'static str,
-    skip_empty: bool,
+pub(crate) struct EncryptedColumn {
+    pub(crate) table: &'static str,
+    pub(crate) column: &'static str,
+    /// `WHERE col != ''`로 빈 값을 건너뛸지 여부.
+    ///
+    /// **nullable 컬럼은 반드시 true여야 한다.** SQLite에서 `NULL != ''`는 참이 아니라
+    /// NULL이라 그 행이 조회에서 빠지는데, `fetch_id_text`는 `row.get::<String>()`을
+    /// 하므로 false로 두면 NULL 행에서 타입 변환이 실패한다.
+    pub(crate) skip_empty: bool,
+    /// 이 컬럼이 암호화 대상이 된 스키마 버전.
+    ///
+    /// 마이그레이션은 **그 버전에 새로 추가된 컬럼만** 암호화한다
+    /// (`encrypt_columns_introduced_in`). 이미 암호문인 컬럼을 다시 돌리면 이중
+    /// 암호화가 되고, 그 파일은 한 번의 복호화로 평문이 나오지 않아 복구가 안 된다.
+    ///
+    /// 여기에 컬럼을 추가하는 것은 **DDL이 그대로여도 스키마 버전 bump 사유다.**
+    /// 어느 파일이 이미 변환됐는지 구분할 표식이 user_version뿐이기 때문이다(db.rs 참고).
+    ///
+    /// **추가하는 경로만 있다.** 제거도 같은 이유로 bump 사유지만, 대응하는 복호화
+    /// 훅이 없다. 그냥 빼면 그 컬럼은 암호문인 채로 남는데 읽기 경로에서
+    /// `maybe_decrypt`가 빠지고 `decrypt_all_data` 대상에서도 사라져, 값을 되찾을
+    /// 방법이 없어진다. 빼야 한다면 `decrypt_columns_removed_in`에 해당하는 훅을
+    /// 먼저 만들고 그 버전의 `data_step`에 붙일 것.
+    pub(crate) since_version: u32,
 }
 
-const ENCRYPTED_COLUMNS: &[EncryptedColumn] = &[
+pub(crate) const ENCRYPTED_COLUMNS: &[EncryptedColumn] = &[
     EncryptedColumn {
         table: "Student",
         column: "name",
         skip_empty: false,
+        since_version: 1,
     },
     EncryptedColumn {
         table: "ActivityRecord",
         column: "content",
         skip_empty: true,
+        since_version: 1,
     },
     EncryptedColumn {
         table: "ActivityRecordHistory",
         column: "content",
         skip_empty: true,
+        since_version: 1,
+    },
+    // v2에서 추가. 사용자가 직접 쓰는 자유 텍스트라 학생 기록만큼 민감하다.
+    //
+    // 앱이 자동으로 넣는 고정 문자열("가져오기 전" 등)까지 함께 암호화된다.
+    // 그 자체로 숨길 정보는 없지만, 한 컬럼에 평문과 암호문이 섞이는 순간
+    // decrypt_all_data가 평문 행에서 실패해 **암호화 해제와 비밀번호 변경이
+    // 영구히 막힌다.** 크기보다 컬럼 단위의 균일성이 중요하다.
+    EncryptedColumn {
+        table: "ActivityRecordHistory",
+        column: "note",
+        skip_empty: true,
+        since_version: 2,
+    },
+    EncryptedColumn {
+        table: "Snapshot",
+        column: "memo",
+        skip_empty: true,
+        since_version: 2,
     },
 ];
 
@@ -124,6 +165,64 @@ pub(crate) fn decrypt_all_data(conn: &Connection, key: [u8; 32]) -> Result<(), S
     transform_all_data(conn, key, DataTransform::Decrypt)
 }
 
+/// 지정한 스키마 버전에서 **새로** 암호화 대상이 된 컬럼만 암호화한다.
+///
+/// 마이그레이션 전용이다. 호출부(`db::migrate`의 data_step)가 이미 트랜잭션을 열어둔
+/// 상태여야 하며, 여기서 BEGIN을 열면 중첩되어 실패한다.
+///
+/// `since_version`이 더 낮은 컬럼은 건드리지 않는다. 이미 암호문인 값을 다시 돌리면
+/// 이중 암호화가 되기 때문이다.
+///
+/// 그 위에 한 겹 더 둔다 — **이미 이 키로 복호화되는 값은 건너뛴다.** 마이그레이션이
+/// 실패해 파일이 이전 버전에 머무르면 그 파일은 닫히지 않고 작업 화면까지 열리므로,
+/// 그 사이에 새 표현으로 쓰인 행이 다음 열기에서 한 번 더 변환될 수 있다. GCM 인증
+/// 태그가 "이 키로 이미 암호화됨"을 사실상 오탐 없이 가려내므로, 이 검사로 이 단계가
+/// 몇 번을 돌아도 같은 결과가 된다.
+///
+/// 실제로 바꾼 행이 있으면 **같은 트랜잭션 안에** 정리(VACUUM) 표시를 남긴다.
+/// UPDATE는 옛 페이지를 freelist로 보내므로 그 자리에 평문 메모가 남는다.
+/// 표시가 커밋에 포함되어야 커밋 직후 죽어도 다음에 이어받을 수 있다
+/// (`with_purge_marked_transaction` 주석과 같은 이유. 다만 그 헬퍼는 자체 BEGIN을
+/// 열기 때문에 여기서는 쓸 수 없고, set_config_impl을 직접 부른다).
+///
+/// 반환값은 바꾼 행 수다.
+pub(crate) fn encrypt_columns_introduced_in(
+    conn: &Connection,
+    key: Option<[u8; 32]>,
+    version: u32,
+) -> Result<usize, String> {
+    // 암호화를 쓰지 않는 파일은 바꿀 것이 없다. 버전만 오르면 된다.
+    let Some(key) = key else {
+        return Ok(0);
+    };
+
+    let mut changed = 0usize;
+    for spec in ENCRYPTED_COLUMNS
+        .iter()
+        .filter(|c| c.since_version == version)
+    {
+        let rows = fetch_id_text(conn, &select_column_sql(spec))?;
+        let update_sql = update_column_sql(spec);
+        for (id, value) in rows {
+            if decrypt(&value, &key).is_ok() {
+                continue;
+            }
+            // maybe_encrypt를 쓴다. 빈 문자열을 그대로 두는 것이 enable/disable
+            // 경로와 같은 표현이다. raw encrypt를 쓰면 skip_empty=false인 컬럼에서
+            // 두 경로가 빈 값을 다르게 저장한다.
+            let encrypted = maybe_encrypt(&value, Some(key))?;
+            conn.execute(&update_sql, rusqlite::params![encrypted, id])
+                .map_err(|e| e.to_string())?;
+            changed += 1;
+        }
+    }
+
+    if changed > 0 {
+        set_config_impl(conn, KEY_PURGE_PENDING, "메모 암호화")?;
+    }
+    Ok(changed)
+}
+
 /// 새로 설정하는 비밀번호만 검사한다.
 ///
 /// **잠금 해제(unlock)에는 절대 적용하지 않는다.** 이 하한이 생기기 전에 3자 이하로
@@ -168,7 +267,11 @@ fn verify_password(
     }
 }
 
-pub(crate) fn resolve_data_key(
+/// 버전 검사를 하지 않고 키만 확인한다. **마이그레이션 전용.**
+///
+/// 마이그레이션 자체는 파일이 아직 옛 버전일 때 도는 것이 정상이므로, 아래
+/// `resolve_data_key`의 가드를 그대로 쓰면 자기 자신이 막힌다.
+pub(crate) fn resolve_data_key_unchecked(
     conn: &Connection,
     crypto: &CryptoStateHandle,
 ) -> Result<Option<[u8; 32]>, String> {
@@ -179,6 +282,44 @@ pub(crate) fn resolve_data_key(
     current_crypto_key(crypto)?
         .map(Some)
         .ok_or_else(|| "암호화가 잠금 상태입니다.".to_string())
+}
+
+/// 마이그레이션이 끝난 파일인지 확인한다.
+///
+/// 마이그레이션이 실패해도 파일은 닫히지 않는다. 그대로 두면 옛 버전 파일에 새 표현으로
+/// 데이터를 쓰게 되고, 다음에 열 때 마이그레이션이 그 행을 한 번 더 변환한다.
+/// `encrypt_columns_introduced_in`의 멱등 검사가 그것까지 막지만, 애초에 그런 파일이
+/// 만들어지지 않게 여기서 먼저 끊는다.
+///
+/// 암호화 경로 셋(켜기·끄기·비밀번호 변경)과 데이터 키 조회에 모두 적용한다. 하나만
+/// 열어두면 그 경로로 정확히 위 상태가 만들어진다.
+pub(crate) fn ensure_migrated(conn: &Connection) -> Result<(), String> {
+    let version: u32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if version != crate::db::SCHEMA_VERSION {
+        return Err(format!(
+            "파일 형식 업데이트가 끝나지 않았습니다 (파일 v{version}, 현재 v{}). 파일을 닫았다가 다시 열어주세요.",
+            crate::db::SCHEMA_VERSION
+        ));
+    }
+    Ok(())
+}
+
+/// 데이터를 읽거나 쓰기 전에 부르는 정상 경로.
+///
+/// **마이그레이션이 끝나지 않은 파일에서는 거부한다.** 마이그레이션이 실패해도 파일은
+/// 닫히지 않는다 — 프론트엔드가 파일을 연 시점에 이미 열린 상태로 표시하고, 작업 화면
+/// 진입도 그 상태만 본다. 그대로 두면 옛 버전 파일에 새 표현으로 데이터를 쓰게 되고,
+/// 다음에 열 때 마이그레이션이 그 행을 한 번 더 변환한다.
+/// `encrypt_columns_introduced_in`의 멱등 검사가 그것까지 막지만, 애초에 그런 파일이
+/// 만들어지지 않게 여기서 먼저 끊는다.
+pub(crate) fn resolve_data_key(
+    conn: &Connection,
+    crypto: &CryptoStateHandle,
+) -> Result<Option<[u8; 32]>, String> {
+    ensure_migrated(conn)?;
+    resolve_data_key_unchecked(conn, crypto)
 }
 
 pub(crate) fn get_encryption_status_impl(
@@ -222,7 +363,7 @@ pub(crate) fn unlock_encryption_impl(
 /// 않는다. enable/disable/change 세 경로 모두 트랜잭션을 열기 전에 호출한다.
 /// DbState 락은 커맨드 래퍼가 이미 잡고 있으므로(conn을 넘겨받는다) 여기서는
 /// DbPathState만 잡아 DbState → DbPathState 순서를 유지한다.
-fn backup_db_file(
+pub(crate) fn backup_db_file(
     conn: &Connection,
     db_path_state: &DbPathState,
     suffix: &str,
@@ -343,7 +484,7 @@ pub(crate) fn retry_pending_purge_impl(conn: &Connection) -> Result<(), String> 
 ///
 /// 삭제 실패를 조용히 넘기면 사용자는 백업이 사라진 줄 알지만 실제로는 남아 있게
 /// 된다. 그 상태가 바로 이 수정이 없애려는 상황이므로 반드시 오류로 알린다.
-fn remove_backup_after_success(path: &Path, what: &str) -> Result<(), String> {
+pub(crate) fn remove_backup_after_success(path: &Path, what: &str) -> Result<(), String> {
     std::fs::remove_file(path).map_err(|e| {
         format!(
             "{what}는 완료했지만 백업 파일을 삭제하지 못했습니다. 직접 삭제해주세요: {} ({e})",
@@ -358,6 +499,7 @@ pub(crate) fn enable_encryption_impl(
     db_path_state: &DbPathState,
     password: &str,
 ) -> Result<(), String> {
+    ensure_migrated(conn)?;
     validate_new_password(password)?;
     if is_encryption_enabled(conn)? {
         return Err("이미 암호화가 활성화되어 있습니다.".to_string());
@@ -421,6 +563,7 @@ pub(crate) fn change_encryption_password_impl(
     old_password: &str,
     new_password: &str,
 ) -> Result<(), String> {
+    ensure_migrated(conn)?;
     validate_new_password(new_password)?;
     let (salt, verify_token) = encryption_material(conn)?;
     let old_key = verify_password(

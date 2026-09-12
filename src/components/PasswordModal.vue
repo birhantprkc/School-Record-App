@@ -12,7 +12,11 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel'])
 
-useEscapeKey(() => emit('cancel'))
+// 진행 중에는 취소를 막는다 — 취소 버튼도 같은 조건으로 비활성화되어 있다.
+// ESC만 열어두면 잠금 해제 도중에 파일이 닫혀 열기 절차가 중간에 끊긴다.
+useEscapeKey(() => {
+  if (!props.loading) emit('cancel')
+})
 
 const password = ref('')
 const newPassword = ref('')

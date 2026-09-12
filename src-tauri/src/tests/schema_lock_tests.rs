@@ -4,16 +4,23 @@
 //! 정식 출시 이후에는 사용자 PC에 이미 특정 구조의 DB 파일이 존재하므로,
 //! 스키마 변경에는 반드시 버전 bump + 마이그레이션이 따라야 한다.
 //!
-//! ## 스키마를 변경할 때의 절차 (예: v1 → v2)
+//! ## 스키마를 변경할 때의 절차 (vN → vN+1)
 //! 1. `schema.sql`을 수정한다.
-//! 2. `tests/schema_history/v1.sql`은 **그대로 둔다**(배포된 구조의 기록).
-//!    수정한 `schema.sql`을 `tests/schema_history/v2.sql`로 복사한다.
-//! 3. `db.rs`의 `SCHEMA_VERSION`을 2로 올리고, `MIGRATIONS`에 v1→v2 SQL을 추가한다.
-//! 4. `SCHEMA_BASELINES`에 `v2.sql`, `SCHEMA_FINGERPRINTS`에 새 지문을 추가한다.
+//! 2. 기존 `tests/schema_history/vN.sql`은 **그대로 둔다**(배포된 구조의 기록).
+//!    수정한 `schema.sql`을 `tests/schema_history/vN+1.sql`로 복사한다.
+//! 3. `db.rs`의 `SCHEMA_VERSION`을 올리고, `MIGRATIONS`에 vN→vN+1 SQL을 추가한다.
+//! 4. `SCHEMA_BASELINES`에 새 파일, `SCHEMA_FINGERPRINTS`에 새 지문을 추가한다.
 //!    (지문 값은 이 테스트 실패 메시지에 실제 값이 출력된다)
 //! 5. `tauri.conf.json`의 앱 버전도 함께 올린다 (릴리즈 노트 모달 표시 조건).
 //!
 //! 1~4 중 하나라도 빠지면 이 모듈의 테스트가 실패한다.
+//!
+//! ## DDL이 그대로여도 버전을 올려야 하는 경우
+//! `ENCRYPTED_COLUMNS`(commands/crypto.rs)에 컬럼을 넣거나 빼면 테이블 모양은 같은데
+//! 그 컬럼에 담긴 값의 표현이 달라진다. 어느 파일이 이미 변환됐는지 구분할 표식이
+//! user_version뿐이므로 이때도 버전을 올린다. v1 → v2가 그 경우였고, 그래서
+//! **두 버전의 지문이 같은 값이다.** 지문이 같다고 버전을 합치면 안 된다.
+//! (빼는 쪽은 대응하는 복호화 훅이 아직 없다 — commands/crypto.rs 참고)
 
 use crate::db;
 use rusqlite::Connection;
@@ -27,6 +34,8 @@ use sha2::{Digest, Sha256};
 pub(crate) const SCHEMA_FINGERPRINTS: &[&str] = &[
     // v1 — 정식 출시 스키마
     "fc7c11a3d03c8d4a104f2ec9788745928bcb11cef517bab90b0be463dedb6be2",
+    // v2 — DDL은 v1과 같다(그래서 지문도 같다). 바뀐 것은 note/memo의 암호화 여부다.
+    "fc7c11a3d03c8d4a104f2ec9788745928bcb11cef517bab90b0be463dedb6be2",
 ];
 
 /// 버전별 스키마 원본. 인덱스 i = 스키마 버전 i+1.
@@ -34,6 +43,7 @@ pub(crate) const SCHEMA_FINGERPRINTS: &[&str] = &[
 /// ⚠️ 기존 파일은 절대 수정 금지 (`SCHEMA_FINGERPRINTS`와 같은 이유).
 const SCHEMA_BASELINES: &[&str] = &[
     include_str!("schema_history/v1.sql"), // v1
+    include_str!("schema_history/v2.sql"), // v2
 ];
 
 // ── 헬퍼 ─────────────────────────────────────────────────────
@@ -147,7 +157,11 @@ fn test_migration_path_matches_fresh_install() {
     for i in 0..SCHEMA_BASELINES.len() {
         let version = (i + 1) as u32;
         let mut conn = baseline_db(version);
-        db::migrate(&mut conn, version).unwrap();
+        // 이 테스트가 보는 것은 스키마의 **모양**이다. 데이터 변환은 지문에 영향을 주지
+        // 않으므로 여기서는 아무것도 하지 않는 훅을 넘긴다.
+        // 프로덕션 경로(migrate_schema_impl)는 암호화 키를 받는 훅을 넘긴다 — 그쪽이
+        // no-op으로 도는 일이 없는지는 crypto_cmd_tests의 마이그레이션 테스트가 본다.
+        db::migrate(&mut conn, version, &|_, _| Ok(())).unwrap();
 
         assert_eq!(
             fingerprint(&conn),
@@ -192,4 +206,83 @@ fn test_lock_tables_cover_every_schema_version() {
         "SCHEMA_VERSION을 올렸다면 schema_history/vN.sql을 추가하고 \
          SCHEMA_BASELINES에 등록해야 합니다."
     );
+}
+
+// ── 암호화 대상 컬럼 고정 ────────────────────────────────────
+//
+// schema.sql이 그대로여도 ENCRYPTED_COLUMNS가 바뀌면 저장된 값의 표현이 달라진다.
+// 위 지문 테스트들은 sqlite_master만 보므로 그 변화를 감지하지 못한다. 여기서 본다.
+
+/// 배포된 암호화 대상 목록. (table, column, skip_empty, since_version)
+///
+/// ⚠️ 이 표가 바뀐다는 것은 사용자 파일의 데이터 표현이 바뀐다는 뜻이다.
+/// 값을 고치기 전에 반드시 다음을 확인하라.
+///   - `SCHEMA_VERSION`을 올렸는가 (어느 파일이 이미 변환됐는지 구분할 표식이 그것뿐이다)
+///   - 새 컬럼의 `since_version`이 **새 버전**인가 (기존 버전을 적으면 이미 v_new인 파일은
+///     마이그레이션이 돌지 않아 기존 행이 평문으로 남고, 새 쓰기만 암호문이 된다.
+///     한 컬럼에 둘이 섞이면 decrypt_all_data가 실패해 암호화 해제가 영구히 막힌다)
+///   - 그 컬럼을 읽고 쓰는 **개별 행 경로**를 전부 고쳤는가 (SQL 문자열 안의 리터럴 포함)
+const LOCKED_ENCRYPTED_COLUMNS: &[(&str, &str, bool, u32)] = &[
+    ("Student", "name", false, 1),
+    ("ActivityRecord", "content", true, 1),
+    ("ActivityRecordHistory", "content", true, 1),
+    ("ActivityRecordHistory", "note", true, 2),
+    ("Snapshot", "memo", true, 2),
+];
+
+#[test]
+fn test_encrypted_columns_match_locked_list() {
+    let actual: Vec<(&str, &str, bool, u32)> = crate::commands::crypto::ENCRYPTED_COLUMNS
+        .iter()
+        .map(|c| (c.table, c.column, c.skip_empty, c.since_version))
+        .collect();
+    assert_eq!(
+        actual, LOCKED_ENCRYPTED_COLUMNS,
+        "\n\n암호화 대상 컬럼이 바뀌었습니다. 위 LOCKED_ENCRYPTED_COLUMNS 주석의 \
+         확인 사항을 먼저 읽으세요.\n"
+    );
+}
+
+#[test]
+fn test_encrypted_columns_since_version_is_in_range() {
+    for c in crate::commands::crypto::ENCRYPTED_COLUMNS {
+        assert!(
+            c.since_version >= 1 && c.since_version <= db::SCHEMA_VERSION,
+            "{}.{}의 since_version {}이 범위를 벗어났습니다 (1..={}). \
+             SCHEMA_VERSION보다 크면 마이그레이션이 영영 돌지 않는다.",
+            c.table,
+            c.column,
+            c.since_version,
+            db::SCHEMA_VERSION
+        );
+    }
+}
+
+#[test]
+fn test_nullable_encrypted_columns_skip_empty() {
+    // NULL이 들어갈 수 있는 컬럼에서 skip_empty=false면, select_column_sql이
+    // `WHERE col != ''`를 붙이지 않아 NULL 행이 조회에 섞이고 fetch_id_text의
+    // row.get::<String>()이 타입 변환에서 터진다.
+    let conn = fresh_db();
+    for c in crate::commands::crypto::ENCRYPTED_COLUMNS {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({})", c.table))
+            .unwrap();
+        let found = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(1)?, r.get::<_, i64>(3)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .find(|(name, _)| name == c.column);
+
+        let (_, notnull) = found.unwrap_or_else(|| {
+            panic!("{}.{}가 schema.sql에 없습니다", c.table, c.column)
+        });
+        if notnull == 0 {
+            assert!(
+                c.skip_empty,
+                "{}.{}는 nullable이므로 skip_empty가 true여야 합니다",
+                c.table, c.column
+            );
+        }
+    }
 }

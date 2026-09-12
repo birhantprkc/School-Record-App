@@ -223,7 +223,9 @@ pub fn get_record_history_impl(
             id,
             content: maybe_decrypt(content, key)?,
             changed_at,
-            note,
+            // note도 v2부터 암호화 대상이다. content만 풀고 note를 그대로 두면
+            // 화면에 암호문이 그대로 찍힌다.
+            note: note.map(|n| maybe_decrypt(n, key)).transpose()?,
         });
     }
     Ok(entries)
@@ -246,12 +248,20 @@ pub fn get_record_history(
     get_record_history_impl(conn, activity_id, student_id, limit, offset, key)
 }
 
+/// 히스토리에 현재 내용을 남긴다. `note`는 평문으로 받아 저장 직전에 암호화한다.
+///
+/// 호출부가 넘기는 note는 사용자가 직접 타이핑한 메모이거나 앱이 붙이는 고정 문자열
+/// ("가져오기 전" 등)이다. 둘을 구분하지 않고 전부 암호화한다 — 한 컬럼에 평문과
+/// 암호문이 섞이면 decrypt_all_data가 실패해 암호화 해제가 막힌다(crypto.rs 참고).
 pub fn save_snapshot_internal(
     conn: &Connection,
     activity_id: i64,
     student_id: i64,
     note: Option<&str>,
+    key: Option<[u8; 32]>,
 ) -> Result<(), String> {
+    let stored_note = note.map(|n| maybe_encrypt(n, key)).transpose()?;
+
     let inserted = conn
         .execute(
             "INSERT INTO ActivityRecordHistory (activity_record_id, content, changed_at, note)
@@ -264,7 +274,7 @@ pub fn save_snapshot_internal(
                                  WHERE h2.activity_record_id = r.id)
                      AND h.content = r.content
                )",
-            rusqlite::params![activity_id, student_id, note],
+            rusqlite::params![activity_id, student_id, stored_note],
         )
         .map_err(|e| e.to_string())?;
 
@@ -276,7 +286,7 @@ pub fn save_snapshot_internal(
                  JOIN ActivityRecord r ON r.id = h.activity_record_id
                  WHERE r.activity_id = ?1 AND r.student_id = ?2
              )",
-            rusqlite::params![activity_id, student_id, note],
+            rusqlite::params![activity_id, student_id, stored_note],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -289,12 +299,14 @@ pub fn save_history_snapshot(
     student_id: i64,
     note: Option<String>,
     state: State<DbState>,
+    crypto: State<CryptoStateHandle>,
 ) -> Result<(), String> {
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard
         .as_ref()
         .ok_or_else(|| "DB가 열려있지 않습니다.".to_string())?;
-    save_snapshot_internal(conn, activity_id, student_id, note.as_deref())
+    let key = resolve_data_key(conn, &crypto)?;
+    save_snapshot_internal(conn, activity_id, student_id, note.as_deref(), key)
 }
 
 pub fn bulk_import_records_impl(
@@ -379,7 +391,7 @@ pub fn bulk_import_records_impl(
         // 셀 편집은 히스토리를 만들지 않는 설계(CLAUDE.md)이므로, 손으로 고친 뒤
         // 재가져오기를 하면 그 내용이 복구 수단 없이 사라졌다.
         // 해당 기록이 아직 없으면 남길 것도 없으므로 no-op이 된다.
-        save_snapshot_internal(conn, r.activity_id, student_id, Some("가져오기 전"))?;
+        save_snapshot_internal(conn, r.activity_id, student_id, Some("가져오기 전"), key)?;
 
         conn.execute(
             "INSERT INTO ActivityRecord (activity_id, student_id, content, updated_at)
@@ -392,9 +404,11 @@ pub fn bulk_import_records_impl(
         .map_err(|e| e.to_string())?;
 
         if !r.content.is_empty() {
+            // note를 SQL 리터럴로 박아두면 암호화를 거치지 않는다. 바인딩해서 넘긴다.
+            let import_note = maybe_encrypt("import", key)?;
             conn.execute(
                 "INSERT INTO ActivityRecordHistory (activity_record_id, content, changed_at, note)
-                 SELECT r.id, r.content, r.updated_at, 'import'
+                 SELECT r.id, r.content, r.updated_at, ?3
                  FROM ActivityRecord r
                  WHERE r.activity_id = ?1 AND r.student_id = ?2
                    AND NOT EXISTS (
@@ -403,7 +417,7 @@ pub fn bulk_import_records_impl(
                                      WHERE h2.activity_record_id = r.id)
                          AND h.content = r.content
                    )",
-                rusqlite::params![r.activity_id, student_id],
+                rusqlite::params![r.activity_id, student_id, import_note],
             )
             .map_err(|e| e.to_string())?;
         }
@@ -623,7 +637,7 @@ pub fn bulk_quick_replace_impl(
     for (activity_id, student_id, raw_content) in rows {
         let content = maybe_decrypt(raw_content, key)?;
         if content.contains(search_text) {
-            save_snapshot_internal(conn, activity_id, student_id, Some("빠른 텍스트 교체"))?;
+            save_snapshot_internal(conn, activity_id, student_id, Some("빠른 텍스트 교체"), key)?;
             let new_content = content.replace(search_text, replace_with);
             upsert_record_impl(conn, activity_id, student_id, &new_content, key)?;
             changed += 1;

@@ -5,6 +5,7 @@ use std::sync::Mutex;
 pub mod engine_tests;
 pub mod db_tests;
 pub mod schema_lock_tests;
+pub mod migration_v2_tests;
 pub mod project_tests;
 pub mod area_tests;
 pub mod activity_tests;
@@ -39,6 +40,10 @@ pub fn setup_test_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
     conn.execute_batch(include_str!("../schema.sql")).unwrap();
+    // 실제 파일과 같은 상태로 맞춘다. db::create_new도 여기서 user_version을 기록하며,
+    // resolve_data_key가 "마이그레이션이 끝난 파일인가"를 이 값으로 판단한다.
+    conn.pragma_update(None, "user_version", crate::db::SCHEMA_VERSION)
+        .unwrap();
     conn
 }
 

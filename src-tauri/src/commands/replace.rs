@@ -355,7 +355,7 @@ pub fn apply_replace_impl(
 
     with_transaction(conn, || {
         for (activity_id, student_id, plain_content) in &changes {
-            save_snapshot_internal(conn, *activity_id, *student_id, Some("치환 적용 전"))?;
+            save_snapshot_internal(conn, *activity_id, *student_id, Some("치환 적용 전"), key)?;
 
             let stored = maybe_encrypt(plain_content, key)?;
             conn.execute(

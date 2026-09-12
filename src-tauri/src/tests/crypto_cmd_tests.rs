@@ -375,7 +375,7 @@ fn test_encrypt_then_decrypt_all_data_restores_plaintext() {
     let act_id = insert_activity(&conn, "활동");
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
     upsert_record_impl(&conn, act_id, stu_id, "활동 기록", None).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, Some("before encryption")).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, Some("before encryption"), None).unwrap();
 
     let (db_path, tmp_dir) = setup_temp_db_path_state();
     enable_encryption_impl(&conn, &crypto, &db_path, "password").unwrap();
@@ -709,7 +709,7 @@ fn test_restore_snapshot_with_encryption() {
 
     // v1 내용 저장 후 스냅샷
     upsert_record_impl(&conn, act_id, stu_id, "v1 내용", Some(key)).unwrap();
-    let snapshot = create_snapshot_impl(&conn, Some("v1 스냅샷".to_string())).unwrap();
+    let snapshot = create_snapshot_impl(&conn, Some("v1 스냅샷".to_string()), Some(key)).unwrap();
 
     // v2로 덮어쓰기
     upsert_record_impl(&conn, act_id, stu_id, "v2 내용", Some(key)).unwrap();
@@ -1069,6 +1069,10 @@ fn test_persist_and_reload_with_encryption() {
     let conn = Connection::open(&db_path).unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
     conn.execute_batch(include_str!("../schema.sql")).unwrap();
+    // db::create_new와 같은 상태로 맞춘다 — resolve_data_key가 이 값으로
+    // "마이그레이션이 끝난 파일인가"를 판단한다.
+    conn.pragma_update(None, "user_version", crate::db::SCHEMA_VERSION)
+        .unwrap();
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
     let area_id = insert_area(&conn, "독서", 500);
     let act_id = insert_activity(&conn, "발표");
@@ -1129,6 +1133,10 @@ fn test_change_password_then_reload() {
     let conn = Connection::open(&db_path).unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
     conn.execute_batch(include_str!("../schema.sql")).unwrap();
+    // db::create_new와 같은 상태로 맞춘다 — resolve_data_key가 이 값으로
+    // "마이그레이션이 끝난 파일인가"를 판단한다.
+    conn.pragma_update(None, "user_version", crate::db::SCHEMA_VERSION)
+        .unwrap();
     let stu_id = insert_student(&conn, 1, 1, 1, "김철수");
     let area_id = insert_area(&conn, "수학", 500);
     let act_id = insert_activity(&conn, "수행평가");
@@ -1569,7 +1577,7 @@ fn test_restore_plaintext_snapshot_after_encryption_enabled() {
 
     // 1. 암호화 없이 v1 기록 및 스냅샷 생성 (레거시 동작)
     upsert_record_impl(&conn, act_id, stu_id, "v1 내용", None).unwrap();
-    let snapshot = create_snapshot_impl(&conn, Some("v1 스냅샷".to_string())).unwrap();
+    let snapshot = create_snapshot_impl(&conn, Some("v1 스냅샷".to_string()), None).unwrap();
 
     // 2. 암호화 없이 v2로 덮어쓰기
     upsert_record_impl(&conn, act_id, stu_id, "v2 내용", None).unwrap();
@@ -1856,7 +1864,7 @@ fn test_multiple_snapshots_restore_integrity_after_encryption() {
         "UPDATE ActivityRecord SET updated_at = '2024-01-01 00:00:01' WHERE activity_id=?1 AND student_id=?2",
         rusqlite::params![act_id, stu_id],
     ).unwrap();
-    let snap1 = create_snapshot_impl(&conn, Some("v1".to_string())).unwrap();
+    let snap1 = create_snapshot_impl(&conn, Some("v1".to_string()), None).unwrap();
     conn.execute(
         "UPDATE Snapshot SET created_at = '2024-01-01 00:00:01' WHERE id=?1",
         rusqlite::params![snap1.id],
@@ -1867,7 +1875,7 @@ fn test_multiple_snapshots_restore_integrity_after_encryption() {
         "UPDATE ActivityRecord SET updated_at = '2024-01-01 00:00:02' WHERE activity_id=?1 AND student_id=?2",
         rusqlite::params![act_id, stu_id],
     ).unwrap();
-    let snap2 = create_snapshot_impl(&conn, Some("v2".to_string())).unwrap();
+    let snap2 = create_snapshot_impl(&conn, Some("v2".to_string()), None).unwrap();
     conn.execute(
         "UPDATE Snapshot SET created_at = '2024-01-01 00:00:02' WHERE id=?1",
         rusqlite::params![snap2.id],
@@ -1878,7 +1886,7 @@ fn test_multiple_snapshots_restore_integrity_after_encryption() {
         "UPDATE ActivityRecord SET updated_at = '2024-01-01 00:00:03' WHERE activity_id=?1 AND student_id=?2",
         rusqlite::params![act_id, stu_id],
     ).unwrap();
-    let snap3 = create_snapshot_impl(&conn, Some("v3".to_string())).unwrap();
+    let snap3 = create_snapshot_impl(&conn, Some("v3".to_string()), None).unwrap();
     conn.execute(
         "UPDATE Snapshot SET created_at = '2024-01-01 00:00:03' WHERE id=?1",
         rusqlite::params![snap3.id],
@@ -2351,7 +2359,7 @@ fn test_snapshot_after_change_password_still_restorable() {
     enable_encryption_impl(&conn, &crypto, &db_path, "old_password").unwrap();
     let key = resolve_data_key(&conn, &crypto).unwrap().unwrap();
     upsert_record_impl(&conn, act_id, stu_id, "v1 기록", Some(key)).unwrap();
-    let snap = create_snapshot_impl(&conn, Some("v1".to_string())).unwrap();
+    let snap = create_snapshot_impl(&conn, Some("v1".to_string()), Some(key)).unwrap();
     upsert_record_impl(&conn, act_id, stu_id, "v2 기록", Some(key)).unwrap();
     // 비밀번호 변경 → 모든 데이터 재암호화
     change_encryption_password_impl(&conn, &crypto, &db_path, "old_password", "new_password")

@@ -254,7 +254,7 @@ fn test_save_snapshot_creates_history_entry() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
 
     upsert_record_impl(&conn, act_id, stu_id, "발표 내용", None).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, Some("스냅샷")).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, Some("스냅샷"), None).unwrap();
 
     let count: i64 = conn
         .query_row(
@@ -275,8 +275,8 @@ fn test_save_snapshot_no_duplicate_same_updated_at() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
 
     upsert_record_impl(&conn, act_id, stu_id, "발표 내용", None).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, None).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, None).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, None, None).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, None, None).unwrap();
 
     let count: i64 = conn
         .query_row(
@@ -297,8 +297,8 @@ fn test_save_snapshot_updates_note_when_exists() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
 
     upsert_record_impl(&conn, act_id, stu_id, "발표 내용", None).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, Some("초기 노트")).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, Some("수정 노트")).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, Some("초기 노트"), None).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, Some("수정 노트"), None).unwrap();
 
     let note: Option<String> = conn
         .query_row(
@@ -319,7 +319,7 @@ fn test_save_snapshot_no_record_is_noop() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
     // ActivityRecord 미삽입 — 의도적
 
-    let result = save_snapshot_internal(&conn, act_id, stu_id, Some("노트"));
+    let result = save_snapshot_internal(&conn, act_id, stu_id, Some("노트"), None);
 
     assert!(result.is_ok());
     let count: i64 = conn
@@ -642,7 +642,7 @@ fn test_save_snapshot_without_note_stores_null() {
     let stu_id = insert_student(&conn, 1, 1, 1, "홍길동");
 
     upsert_record_impl(&conn, act_id, stu_id, "발표 내용", None).unwrap();
-    save_snapshot_internal(&conn, act_id, stu_id, None).unwrap();
+    save_snapshot_internal(&conn, act_id, stu_id, None, None).unwrap();
 
     let note: Option<String> = conn
         .query_row(

@@ -16,7 +16,7 @@
 - Font size: `text-base` minimum. `text-sm` / `text-xs` only for exceptions (table cell preview, badge, caption) with explicit justification.
 
 ## DB SCHEMA RULES (정식 출시 이후 적용)
-- 이미 배포된 앱이므로 사용자 PC에 기존 구조의 DB 파일이 존재한다. **`schema.sql` 변경 시 아래를 모두 수행한다.**
+- 이미 배포된 앱이므로 사용자 PC에 기존 구조의 DB 파일이 존재한다. **`schema.sql`을 변경할 때, 또는 `ENCRYPTED_COLUMNS`(`commands/crypto.rs`)에 컬럼을 추가·제거해 저장된 값의 표현이 바뀔 때 아래를 모두 수행한다.**
   1. `db.rs`의 `SCHEMA_VERSION`을 올린다.
   2. `db.rs`의 `MIGRATIONS`에 이전 버전 → 새 버전 SQL을 추가한다.
   3. 수정한 `schema.sql`을 `src-tauri/src/tests/schema_history/vN.sql`로 복사한다.
@@ -24,6 +24,9 @@
   5. `tauri.conf.json`의 앱 버전도 함께 올린다 (릴리즈 노트 모달 표시 조건).
 - **`schema_history/vN.sql`과 기존 지문 값은 절대 수정 금지.** 배포된 DB 구조의 기록이다.
 - 위를 빠뜨리면 `schema_lock_tests.rs`가 실패한다. 테스트를 맞추려고 지문만 고치는 것은 금지.
+- **DDL이 그대로인 버전은 이전 버전과 지문이 같다**(v1·v2가 그렇다). 중복으로 보고 지우지 말 것. 어느 파일이 이미 변환됐는지 구분할 표식이 `user_version`뿐이라 버전을 나눈 것이다.
+- 키가 필요한 데이터 변환은 `MIGRATIONS`(SQL)이 아니라 `db::migrate`의 `data_step` 훅으로 간다. 버전 승격과 한 트랜잭션이어야 하기 때문이다. 어느 버전에서 무엇을 암호화하는지는 `ENCRYPTED_COLUMNS`의 `since_version` 하나가 정한다 — 호출부에서 버전별로 분기하지 말 것.
+- **컬럼을 추가하는 경로만 구현되어 있다**(`encrypt_columns_introduced_in`). 제거도 버전 bump 사유이긴 하나, 대응하는 복호화 훅이 없어 그냥 빼면 그 컬럼은 암호문인 채 읽기 경로에서 `maybe_decrypt`가 빠지고 `decrypt_all_data` 대상에서도 사라진다 — 값을 되찾을 방법이 없어진다. 빼야 한다면 훅부터 만들 것.
 
 ## DESIGN DECISIONS (의도된 설계, 버그 아님)
 - `restore_snapshot_impl`은 복원 전 현재 상태를 `ActivityRecordHistory`에 저장하지 않는다. 복원은 명시적 사용자 액션이므로, 히스토리 자동 저장 없이 스냅샷 시점으로 덮어쓰는 것이 의도된 동작이다.
