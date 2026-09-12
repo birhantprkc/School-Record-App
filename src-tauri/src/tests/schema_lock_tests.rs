@@ -213,49 +213,64 @@ fn test_lock_tables_cover_every_schema_version() {
 // schema.sql이 그대로여도 ENCRYPTED_COLUMNS가 바뀌면 저장된 값의 표현이 달라진다.
 // 위 지문 테스트들은 sqlite_master만 보므로 그 변화를 감지하지 못한다. 여기서 본다.
 
-/// 배포된 암호화 대상 목록. (table, column, skip_empty, since_version)
+/// 버전별 암호화 대상. 인덱스 i = 스키마 버전 i+1에서 **새로 추가된** 컬럼들.
+/// 각 항목은 (table, column, skip_empty).
 ///
-/// ⚠️ 이 표가 바뀐다는 것은 사용자 파일의 데이터 표현이 바뀐다는 뜻이다.
-/// 값을 고치기 전에 반드시 다음을 확인하라.
-///   - `SCHEMA_VERSION`을 올렸는가 (어느 파일이 이미 변환됐는지 구분할 표식이 그것뿐이다)
-///   - 새 컬럼의 `since_version`이 **새 버전**인가 (기존 버전을 적으면 이미 v_new인 파일은
-///     마이그레이션이 돌지 않아 기존 행이 평문으로 남고, 새 쓰기만 암호문이 된다.
-///     한 컬럼에 둘이 섞이면 decrypt_all_data가 실패해 암호화 해제가 영구히 막힌다)
+/// ⚠️ 기존 슬라이스는 절대 수정 금지. 이미 배포된 파일의 데이터 표현 기록이다.
+///
+/// 버전별로 나눈 이유가 있다. 컬럼을 하나의 평평한 목록에 두면, 새 컬럼에
+/// **현재 버전**을 적고 `SCHEMA_VERSION`은 올리지 않는 실수를 아무것도 막지 못한다.
+/// 그 결과는 이렇다 — 이미 그 버전인 사용자 파일은 마이그레이션이 다시 돌지 않으므로
+/// 기존 행은 평문으로 남고 새로 쓰는 것만 암호문이 된다. 한 컬럼에 둘이 섞이면
+/// `decrypt_all_data`가 실패해 **암호화 해제와 비밀번호 변경이 영구히 막힌다.**
+///
+/// 나눠 두면 컬럼 추가 = 새 슬라이스 추가 = `SCHEMA_VERSION` bump가 아래 길이 단언으로
+/// 강제된다(`schema_history/vN.sql`과 같은 구조다).
+///
+/// 새 슬라이스를 추가할 때 함께 확인할 것:
 ///   - 그 컬럼을 읽고 쓰는 **개별 행 경로**를 전부 고쳤는가 (SQL 문자열 안의 리터럴 포함)
-const LOCKED_ENCRYPTED_COLUMNS: &[(&str, &str, bool, u32)] = &[
-    ("Student", "name", false, 1),
-    ("ActivityRecord", "content", true, 1),
-    ("ActivityRecordHistory", "content", true, 1),
-    ("ActivityRecordHistory", "note", true, 2),
-    ("Snapshot", "memo", true, 2),
+///   - nullable이면 `skip_empty`가 true인가 (아래 테스트가 강제한다)
+const LOCKED_ENCRYPTED_COLUMNS: &[&[(&str, &str, bool)]] = &[
+    // v1 — 정식 출시 스키마
+    &[
+        ("Student", "name", false),
+        ("ActivityRecord", "content", true),
+        ("ActivityRecordHistory", "content", true),
+    ],
+    // v2 — 기록 히스토리 메모와 스냅샷 메모
+    &[
+        ("ActivityRecordHistory", "note", true),
+        ("Snapshot", "memo", true),
+    ],
 ];
 
 #[test]
 fn test_encrypted_columns_match_locked_list() {
+    let expected: Vec<(&str, &str, bool, u32)> = LOCKED_ENCRYPTED_COLUMNS
+        .iter()
+        .enumerate()
+        .flat_map(|(i, cols)| cols.iter().map(move |(t, c, s)| (*t, *c, *s, (i + 1) as u32)))
+        .collect();
     let actual: Vec<(&str, &str, bool, u32)> = crate::commands::crypto::ENCRYPTED_COLUMNS
         .iter()
         .map(|c| (c.table, c.column, c.skip_empty, c.since_version))
         .collect();
     assert_eq!(
-        actual, LOCKED_ENCRYPTED_COLUMNS,
-        "\n\n암호화 대상 컬럼이 바뀌었습니다. 위 LOCKED_ENCRYPTED_COLUMNS 주석의 \
-         확인 사항을 먼저 읽으세요.\n"
+        actual, expected,
+        "암호화 대상 컬럼이 바뀌었습니다. LOCKED_ENCRYPTED_COLUMNS 주석의 확인 사항을 먼저 읽으세요."
     );
 }
 
 #[test]
-fn test_encrypted_columns_since_version_is_in_range() {
-    for c in crate::commands::crypto::ENCRYPTED_COLUMNS {
-        assert!(
-            c.since_version >= 1 && c.since_version <= db::SCHEMA_VERSION,
-            "{}.{}의 since_version {}이 범위를 벗어났습니다 (1..={}). \
-             SCHEMA_VERSION보다 크면 마이그레이션이 영영 돌지 않는다.",
-            c.table,
-            c.column,
-            c.since_version,
-            db::SCHEMA_VERSION
-        );
-    }
+fn test_encrypted_columns_cover_every_schema_version() {
+    // 컬럼을 추가하려면 새 슬라이스를 만들어야 하고, 그러면 이 단언이 SCHEMA_VERSION
+    // bump를 강제한다. 평평한 목록이었다면 현재 버전을 적고 bump를 빠뜨리는 실수를
+    // 막을 방법이 없었다.
+    assert_eq!(
+        LOCKED_ENCRYPTED_COLUMNS.len() as u32,
+        db::SCHEMA_VERSION,
+        "암호화 대상 컬럼을 추가했다면 SCHEMA_VERSION도 올려야 합니다."
+    );
 }
 
 #[test]

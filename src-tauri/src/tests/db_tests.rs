@@ -8,10 +8,6 @@ fn no_crypto() -> CryptoStateHandle {
     std::sync::Mutex::new(CryptoState { key: None })
 }
 
-/// 암호화가 꺼진 파일은 마이그레이션이 백업을 뜨지 않으므로 경로가 필요 없다.
-fn no_path() -> crate::state::DbPathState {
-    crate::state::DbPathState(std::sync::Mutex::new(None))
-}
 
 fn temp_path(label: &str) -> std::path::PathBuf {
     let nanos = std::time::SystemTime::now()
@@ -145,7 +141,7 @@ fn test_migrate_schema_upgrades_to_current_version() {
     }
 
     let mut conn = db::open_existing(&path).unwrap();
-    migrate_schema_impl(&mut conn, &no_crypto(), &no_path()).unwrap();
+    migrate_schema_impl(&mut conn, &no_crypto()).unwrap();
 
     let version: u32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -161,7 +157,7 @@ fn test_migrate_schema_is_noop_when_already_current() {
     // 이미 최신 버전이면 migrate_schema_impl은 아무것도 하지 않음
     let path = temp_path("migrate_noop");
     let mut conn = db::create_new(&path).unwrap();
-    migrate_schema_impl(&mut conn, &no_crypto(), &no_path()).unwrap();
+    migrate_schema_impl(&mut conn, &no_crypto()).unwrap();
 
     let version: u32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))

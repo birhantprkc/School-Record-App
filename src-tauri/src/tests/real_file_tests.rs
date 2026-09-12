@@ -229,7 +229,7 @@ fn verify_real_user_files() {
         //    이 하니스의 존재 이유가 여기다: 번들 SQLite가 올라가면서 sqlite_master
         //    텍스트 표기가 달라지면 실제 파일의 지문이 고정 지문과 어긋난다.
         //    이걸 출력만 하고 통과시키면 하니스가 있으나 마나다.
-        match migrate_schema_impl(conn, &crypto, &path_state) {
+        match migrate_schema_impl(conn, &crypto) {
             Ok(()) => {
                 let uv_after: u32 = conn
                     .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -294,7 +294,9 @@ fn verify_real_user_files() {
                     }
                 }
             }
-            Err(e) if encrypted && !unlocked => {
+            // 오류 문자열까지 본다. 상태만 보면 PRAGMA 읽기 실패나 unlock 실패 같은
+            // 진짜 실패가 "의도된 거부"로 묻힌다.
+            Err(e) if encrypted && !unlocked && e.contains("잠금") => {
                 // 의도된 거부다. 키 없이 버전을 올리면 "v2인데 메모는 평문"인 파일이
                 // 남고 그건 복구가 안 된다. 실패로 세지 않는다.
                 println!("  [SKIP] migrate_schema (잠금): {e}");

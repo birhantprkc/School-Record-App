@@ -52,6 +52,14 @@ fn plain_notes(conn: &Connection, act: i64, stu: i64, key: Option<[u8; 32]>) -> 
         .collect()
 }
 
+fn backup_files(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))
+        .filter(|n| n.contains("backup"))
+        .collect()
+}
+
 fn user_version(conn: &Connection) -> u32 {
     conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap()
 }
@@ -134,7 +142,7 @@ fn test_v1_encrypted_migrates_note_and_memo() {
     let before_hist_contents = raw_col(&conn, "ActivityRecordHistory", "content");
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
 
     assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
     assert_eq!(raw_col(&conn, "Student", "name"), before_names);
@@ -177,14 +185,14 @@ fn test_v1_encrypted_migrates_note_and_memo() {
 #[test]
 fn test_v1_plaintext_file_only_bumps_version() {
     let conn = setup_test_db();
-    let (path_state, dir) = setup_temp_db_path_state();
+    let (_path_state, dir) = setup_temp_db_path_state();
     conn.pragma_update(None, "user_version", 1u32).unwrap();
     seed_plaintext(&conn);
     let before_notes = raw_col(&conn, "ActivityRecordHistory", "note");
     let before_memos = raw_col(&conn, "Snapshot", "memo");
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto_state(None), &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto_state(None)).unwrap();
 
     assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
     assert_eq!(raw_col(&conn, "ActivityRecordHistory", "note"), before_notes);
@@ -208,7 +216,7 @@ fn test_v2_file_is_untouched() {
     let before_memos = raw_col(&conn, "Snapshot", "memo");
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
 
     // migrate_schema_impl은 from >= SCHEMA_VERSION에서 곧바로 반환하므로, 위 호출만으로는
     // 변환 로직이 아예 실행되지 않는다. 그것이 no-op이라는 것은 증명하지 못한다.
@@ -241,7 +249,7 @@ fn test_locked_file_refuses_to_migrate() {
     let before_notes = raw_col(&conn, "ActivityRecordHistory", "note");
 
     let mut conn = conn;
-    let err = migrate_schema_impl(&mut conn, &locked, &path_state).unwrap_err();
+    let err = migrate_schema_impl(&mut conn, &locked).unwrap_err();
 
     assert!(err.contains("잠금"), "잠금 상태임을 알려야 한다: {err}");
     assert_eq!(
@@ -311,7 +319,7 @@ fn test_migration_is_idempotent_when_already_ciphertext() {
     .unwrap();
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
 
     let memos: Vec<String> = raw_col(&conn, "Snapshot", "memo")
         .into_iter()
@@ -349,7 +357,7 @@ fn test_writes_after_migration_do_not_block_disable() {
     make_v1_encrypted(&conn, &crypto, &path_state, "password");
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
     let conn = conn;
     let key = resolve_data_key(&conn, &crypto).unwrap();
 
@@ -386,7 +394,7 @@ fn test_change_password_roundtrip_keeps_note_and_memo() {
     make_v1_encrypted(&conn, &crypto, &path_state, "old_password");
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
     let conn = conn;
 
     change_encryption_password_impl(&conn, &crypto, &path_state, "old_password", "new_password")
@@ -541,7 +549,7 @@ fn test_data_key_is_refused_until_migration_finishes() {
     assert!(err.contains(GUARD), "change_password: {err}");
 
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
     assert!(
         resolve_data_key(&conn, &crypto).unwrap().is_some(),
         "마이그레이션이 끝나면 통과해야 한다"
@@ -574,117 +582,177 @@ fn test_data_step_error_rolls_back_its_own_writes() {
     );
 }
 
-// ── 업그레이드 백업 ──────────────────────────────────────────
-
-fn backup_files(dir: &std::path::Path) -> Vec<String> {
-    std::fs::read_dir(dir)
-        .unwrap()
-        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))
-        .filter(|n| n.contains("backup"))
-        .collect()
-}
-
 #[test]
-fn test_upgrade_backup_is_removed_on_success_and_kept_on_failure() {
-    // 마이그레이션 직전의 사본에는 **평문 메모**가 들어 있다. 성공했는데 그 사본이
-    // 남으면, 본 DB를 암호화해 놓고 그 옆에 비밀번호 없이 읽히는 복사본을 영구히
-    // 두는 꼴이 된다. enable_encryption이 -pre-encrypt 백업을 지우는 것과 같은 이유다.
-    // 실패했을 때는 반대로 복구 수단이므로 남아야 한다.
-    let conn = setup_test_db();
-    let (path_state, dir) = setup_temp_db_path_state();
-    let crypto = crypto_state(None);
-    seed_plaintext(&conn);
-    make_v1_encrypted(&conn, &crypto, &path_state, "password");
-    assert!(backup_files(&dir).is_empty(), "시작 상태가 깨끗해야 한다");
-
-    // 1) 실패 — memo UPDATE만 막아 변환 도중에 멈춘다.
-    conn.execute_batch(
-        "CREATE TRIGGER block_memo BEFORE UPDATE ON Snapshot
-         BEGIN SELECT RAISE(ABORT, '테스트'); END;",
-    )
-    .unwrap();
-    let mut conn = conn;
-    let err = migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap_err();
-    assert!(err.contains("복구용 백업"), "백업 경로를 알려야 한다: {err}");
-    assert_eq!(user_version(&conn), 1);
-    assert_eq!(
-        backup_files(&dir).len(),
-        1,
-        "실패했으면 복구용 사본이 남아야 한다"
-    );
-
-    // 2) 성공 — 남아 있던 실패분까지 세지 않도록 지우고 다시 돌린다.
-    for f in backup_files(&dir) {
-        std::fs::remove_file(dir.join(f)).unwrap();
-    }
-    conn.execute_batch("DROP TRIGGER block_memo").unwrap();
-    migrate_schema_impl(&mut conn, &crypto, &path_state).unwrap();
-    assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
-    assert!(
-        backup_files(&dir).is_empty(),
-        "평문 메모가 든 사본이 남았다: {:?}",
-        backup_files(&dir)
-    );
-
-    let _ = std::fs::remove_dir_all(dir);
-}
-
-#[test]
-fn test_v0_file_without_app_configs_still_migrates() {
-    // 버전 도입 이전 파일에는 APP_CONFIGS가 없을 수 있다. 암호화 키를 확보하려고
-    // 그 테이블을 읽는 것이 DDL보다 먼저이므로, 무심코 조회하면 v0 파일이 v1로도
-    // 올라가지 못한다. MIGRATIONS[0]이 존재하는 이유가 그 승격이다.
+fn test_missing_app_configs_does_not_block_version_bump() {
+    // 암호화 키를 확보하려고 APP_CONFIGS를 읽는 것이 DDL 단계보다 **먼저**다.
+    // 무심코 조회하면 그 테이블이 없는 파일은 버전조차 올라가지 못한다.
+    //
+    // 주장 범위는 여기까지다. 그런 파일이 **쓸 수 있게 된다**는 뜻이 아니다 —
+    // schema.sql은 db::create_new에서만 실행되므로 APP_CONFIGS는 끝내 생기지 않고,
+    // HomeView가 열기 직후 get_encryption_status를 부르므로 그런 파일은
+    // 마이그레이션에 닿기도 전에 열기부터 실패한다.
     let conn = setup_test_db();
     conn.execute_batch("DROP TABLE APP_CONFIGS").unwrap();
     conn.pragma_update(None, "user_version", 0u32).unwrap();
 
-    let (path_state, dir) = setup_temp_db_path_state();
+    let (_path_state, dir) = setup_temp_db_path_state();
     let mut conn = conn;
-    migrate_schema_impl(&mut conn, &crypto_state(None), &path_state).unwrap();
+    migrate_schema_impl(&mut conn, &crypto_state(None)).unwrap();
 
     assert_eq!(user_version(&conn), db::SCHEMA_VERSION);
     let _ = std::fs::remove_dir_all(dir);
 }
 
-#[test]
-fn test_open_backup_is_skipped_while_memos_are_plaintext() {
-    // 열 때마다 만드는 백업은 마이그레이션 **직전**에 돈다. 그 시점의 사본에는
-    // 평문 메모가 들어 있고, 그 백업은 앱이 지우지 않으므로 영구히 남는다.
-    // 그래서 이 경우에만 건너뛰고, migrate_schema_impl이 성공 시 지울 수 있는
-    // -pre-upgrade 백업을 대신 만든다. 건너뛰기가 빠지면 본 DB를 암호화해 놓고
-    // 비밀번호 없이 읽히는 사본을 그 옆에 남기게 된다.
-    let conn = setup_test_db();
-    let (path_state, dir) = setup_temp_db_path_state();
+// ── 실제 파일에 평문이 남는가 ────────────────────────────────
+//
+// 이 절만 in-memory DB를 벗어난다. 나머지 테스트가 쓰는 `setup_test_db`는
+// `Connection::open_in_memory`라, 프리 페이지나 백업 **파일**에 평문이 남는지를
+// 원리상 검증할 수 없다.
+//
+// `freelist_count == 0`은 평문 부재의 증거가 못 된다. 암호문이 평문보다 길어 행이
+// 새 페이지로 옮겨가면 옛 이미지는 여전히 **할당된** 페이지의 슬랙에 남고, freelist에는
+// 잡히지 않는다. 그래서 파일 바이트를 직접 훑는다.
+
+/// 파일 바이트 안에 이 문자열이 있는가. 내용은 출력하지 않는다.
+fn file_contains(path: &std::path::Path, needle: &str) -> bool {
+    let bytes = std::fs::read(path).unwrap();
+    bytes
+        .windows(needle.len())
+        .any(|w| w == needle.as_bytes())
+}
+
+/// 파일로 된 v1 암호화 DB를 만든다. 반환: (connection, db 경로)
+fn file_v1_encrypted(
+    dir: &std::path::Path,
+    path_state: &DbPathState,
+    marker: &str,
+) -> (Connection, std::path::PathBuf) {
+    let db_path = dir.join("test.db");
+    let _ = std::fs::remove_file(&db_path);
+    let conn = Connection::open(&db_path).unwrap();
+    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+    conn.execute_batch(include_str!("../schema.sql")).unwrap();
+    conn.pragma_update(None, "user_version", db::SCHEMA_VERSION)
+        .unwrap();
+
+    let stu = insert_student(&conn, 1, 1, 1, "홍길동");
+    let act = insert_activity(&conn, "학급회의");
+    insert_record(&conn, act, stu, "학급 회의를 주도함");
+    save_snapshot_internal(&conn, act, stu, Some(marker), None).unwrap();
+
+    // 메모를 넉넉히 만든다. 한두 줄만 있으면 암호문으로 바꿀 때 같은 페이지 안에서
+    // 정리되면서 옛 평문이 그대로 덮어써져, 정리(VACUUM)를 빼도 테스트가 통과한다.
+    // 그러면 이 테스트가 이름이 약속한 것을 지키지 못한다.
+    for i in 0..200 {
+        create_snapshot_impl(&conn, Some(format!("{marker}{i}")), None).unwrap();
+    }
+
     let crypto = crypto_state(None);
-    seed_plaintext(&conn);
-    make_v1_encrypted(&conn, &crypto, &path_state, "password");
+    make_v1_encrypted(&conn, &crypto, path_state, "password");
+    (conn, db_path)
+}
+
+#[test]
+fn test_migration_leaves_no_plaintext_memo_in_the_file() {
+    // 변환은 UPDATE다. 옛 페이지에 평문이 남으므로 커밋 뒤 정리(VACUUM)가 돌아야 한다.
+    let (path_state, dir) = setup_temp_db_path_state();
+    const MARKER: &str = "평문마커_학생이름_홍길동";
+    let (conn, db_path) = file_v1_encrypted(&dir, &path_state, MARKER);
+    let crypto = crypto_state(None);
+    crate::commands::crypto::unlock_encryption_impl(&conn, &crypto, "password").unwrap();
+
+    assert!(
+        file_contains(&db_path, MARKER),
+        "변환 전에는 파일에 평문이 있어야 한다 (테스트 전제)"
+    );
+
+    let mut conn = conn;
+    migrate_schema_impl(&mut conn, &crypto).unwrap();
+    drop(conn);
+
+    assert!(
+        !file_contains(&db_path, MARKER),
+        "변환 후 파일 안에 평문 메모가 남아 있다"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_backup_taken_after_migration_has_no_plaintext_memo() {
+    // 열 때마다 만드는 백업은 마이그레이션 **뒤에** 떠야 한다(HomeView 참고).
+    // 앞에 뜨면 그 사본에 평문 메모가 담긴 채 본 DB만 암호화되고, 앱은 백업을
+    // 스캔하지도 지우지도 않으므로 비밀번호 없이 읽히는 파일이 영구히 남는다.
+    let (path_state, dir) = setup_temp_db_path_state();
+    const MARKER: &str = "평문마커_스냅샷메모";
+    let (conn, _db_path) = file_v1_encrypted(&dir, &path_state, MARKER);
+    let crypto = crypto_state(None);
+    crate::commands::crypto::unlock_encryption_impl(&conn, &crypto, "password").unwrap();
 
     let db_state = DbState(Mutex::new(Some(conn)));
+    {
+        let mut guard = db_state.0.lock().unwrap();
+        migrate_schema_impl(guard.as_mut().unwrap(), &crypto).unwrap();
+    }
     backup_project_impl(&db_state, &path_state).unwrap();
+
+    let backups = backup_files(&dir);
+    assert_eq!(backups.len(), 1, "열 때마다 백업 하나는 만들어져야 한다");
+    assert!(
+        !file_contains(&dir.join(&backups[0]), MARKER),
+        "백업 사본에 평문 메모가 들어 있다"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_failed_migration_leaves_no_new_copy() {
+    // 변환이 실패하면 백업도 만들어지지 않는다(프론트엔드가 migrate 실패 시
+    // backup을 부르지 않는다). 반복 실패해도 평문 사본이 쌓이지 않는다.
+    let (path_state, dir) = setup_temp_db_path_state();
+    const MARKER: &str = "평문마커_실패";
+    let (conn, _) = file_v1_encrypted(&dir, &path_state, MARKER);
+    let crypto = crypto_state(None);
+    crate::commands::crypto::unlock_encryption_impl(&conn, &crypto, "password").unwrap();
+    conn.execute_batch(
+        "CREATE TRIGGER block BEFORE UPDATE ON Snapshot
+         BEGIN SELECT RAISE(ABORT, '테스트'); END;",
+    )
+    .unwrap();
+
+    let mut conn = conn;
+    for _ in 0..3 {
+        migrate_schema_impl(&mut conn, &crypto).unwrap_err();
+    }
+    assert_eq!(user_version(&conn), 1);
     assert!(
         backup_files(&dir).is_empty(),
-        "변환 전 평문 사본이 남았다: {:?}",
+        "실패가 반복돼도 사본이 쌓이면 안 된다: {:?}",
         backup_files(&dir)
     );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn test_backup_is_refused_before_migration() {
+    // 백업이 마이그레이션보다 먼저 돌면 평문 메모 사본이 만들어진다. 호출 순서를
+    // 프론트엔드의 약속으로만 두면 되돌려도 아무것도 걸리지 않으므로 여기서 막는다.
+    let (path_state, dir) = setup_temp_db_path_state();
+    let (conn, _) = file_v1_encrypted(&dir, &path_state, "평문마커");
+
+    let db_state = DbState(Mutex::new(Some(conn)));
+    let err = backup_project_impl(&db_state, &path_state).unwrap_err();
+    assert!(err.contains("파일 형식 업데이트가 끝나지 않았습니다"), "{err}");
+    assert!(backup_files(&dir).is_empty());
 
     {
         let mut guard = db_state.0.lock().unwrap();
         let conn = guard.as_mut().unwrap();
-        migrate_schema_impl(conn, &crypto, &path_state).unwrap();
+        let crypto = crypto_state(None);
+        crate::commands::crypto::unlock_encryption_impl(conn, &crypto, "password").unwrap();
+        migrate_schema_impl(conn, &crypto).unwrap();
     }
-    assert!(
-        backup_files(&dir).is_empty(),
-        "변환에 성공했으면 -pre-upgrade 사본도 남지 않는다"
-    );
-
-    // v2가 된 뒤에는 평소대로 백업을 만든다. 건너뛰기가 그 상태에 눌러앉으면
-    // 사용자는 열 때마다 생기던 백업을 영영 잃는다.
     backup_project_impl(&db_state, &path_state).unwrap();
-    assert_eq!(
-        backup_files(&dir).len(),
-        1,
-        "평소 열기에서는 백업을 만들어야 한다"
-    );
+    assert_eq!(backup_files(&dir).len(), 1);
 
     let _ = std::fs::remove_dir_all(dir);
 }

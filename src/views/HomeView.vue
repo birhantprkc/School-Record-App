@@ -70,8 +70,14 @@ async function handleOpen() {
 }
 
 async function showReleaseNotesOrNavigate() {
-  await project.backupProject()
+  // 백업은 반드시 마이그레이션 **뒤에** 한다.
+  //
+  // 앞에 두면 메모 암호화로 넘어가는 그 한 번의 열기에서, 사본에 평문 메모가 담긴
+  // 채로 본 DB만 암호화된다. 앱은 백업을 지우지 않으므로 비밀번호 없이 읽히는
+  // 사본이 영구히 남는다. 마이그레이션은 단일 트랜잭션이라 실패해도 파일이
+  // 그대로이므로, 변환 전 사본이 막아줄 사고가 없다.
   await project.migrateSchema()
+  await project.backupProject()
   const oldVersion = await project.checkAndUpdateVersion()
   if (oldVersion !== null) {
     releaseNotesToShow.value = getNotesToShow(oldVersion)

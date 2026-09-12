@@ -81,17 +81,15 @@ pub(crate) fn backup_project_impl(
     let guard = db_state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard.as_ref().ok_or("열린 프로젝트가 없습니다.")?;
 
-    // 이번 열기에서 메모가 암호화될 파일이면 여기서 백업을 뜨지 않는다.
+    // **마이그레이션이 끝난 뒤에만 백업한다.**
     //
-    // 지금 뜨면 그 사본에는 **평문 메모**가 들어간다. 몇 초 뒤 본 DB는 암호화되는데
-    // 비밀번호 없이 읽히는 사본이 그 옆에 영구히 남는 꼴이다. enable_encryption이
-    // -pre-encrypt 백업을 성공 시 반드시 지우는 것과 같은 이유다.
+    // 메모 암호화로 넘어가는 파일을 변환 전에 뜨면 그 사본에 평문 메모가 담긴다.
+    // 본 DB만 암호화되고, 앱은 백업을 스캔하지도 지우지도 않으므로(CLAUDE.md)
+    // 비밀번호 없이 읽히는 파일이 그 옆에 영구히 남는다.
     //
-    // 대신 migrate_schema_impl이 -pre-upgrade 백업을 직접 만들고, 변환에 성공하면
-    // 지운다. 실패하면 남겨서 복구 수단으로 쓴다.
-    if will_encrypt_memos(conn)? {
-        return Ok(());
-    }
+    // 호출 순서를 프론트엔드의 약속으로만 두면 누군가 되돌렸을 때 아무것도
+    // 걸리지 않는다. 그래서 여기서 막는다.
+    crate::commands::crypto::ensure_migrated(conn)?;
 
     let path_guard = db_path_state.0.lock().map_err(|e| e.to_string())?;
     let src = path_guard.as_ref().ok_or("DB path not set")?;
@@ -167,23 +165,22 @@ fn has_app_configs(conn: &Connection) -> Result<bool, String> {
         .is_some())
 }
 
-/// 이번 열기에서 메모가 평문에서 암호문으로 바뀌는 파일인가.
+/// 파일을 현재 스키마 버전까지 올린다.
 ///
-/// 참이면 이 시점의 DB 사본은 평문 메모를 담는다. 백업을 어떻게 다룰지가 달라진다.
-fn will_encrypt_memos(conn: &Connection) -> Result<bool, String> {
-    if !has_app_configs(conn)? {
-        return Ok(false);
-    }
-    let version: u32 = conn
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
-        .map_err(|e| e.to_string())?;
-    Ok(version < crate::db::SCHEMA_VERSION && crate::commands::crypto::is_encryption_enabled(conn)?)
-}
-
+/// **이 함수는 백업을 만들지 않는다.** 열 때마다 만드는 백업(`backup_project_impl`)은
+/// 프론트엔드가 이 함수 **뒤에** 호출한다. 순서가 그래야 하는 이유는 이렇다.
+///
+/// 변환 전에 사본을 뜨면 그 사본에는 **평문 메모**가 담긴다. 몇 초 뒤 본 DB는
+/// 암호화되는데, 비밀번호 없이 읽히는 사본이 그 옆에 남는 꼴이다. 앱은 백업을
+/// 스캔하지도 지우지도 않으므로(CLAUDE.md) 그 파일은 영구히 남는다.
+///
+/// 변환 전 사본이 막아주는 사고는 "암호화 코드 자체의 버그로 잘못된 암호문이
+/// 커밋되는 것"뿐인데, 그건 **직전 열기의 백업**이 이미 커버한다. 전원이 나가거나
+/// 강제 종료되는 경우는 마이그레이션이 단일 트랜잭션이라 SQLite가 롤백한다.
+/// 확정적인 평문 노출과 맞바꿀 이유가 없다.
 pub fn migrate_schema_impl(
     conn: &mut Connection,
     crypto: &CryptoStateHandle,
-    db_path_state: &DbPathState,
 ) -> Result<(), String> {
     let from: u32 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
@@ -194,19 +191,6 @@ pub fn migrate_schema_impl(
 
     let key = if has_app_configs(conn)? {
         crate::commands::crypto::resolve_data_key_unchecked(conn, crypto)?
-    } else {
-        None
-    };
-
-    // 평문 메모를 담을 백업은 여기서 만들고 성공하면 지운다(backup_project_impl 주석 참고).
-    // 실패하면 남는다 — 그때는 복구 수단이 필요하고, 아직 평문인 파일의 사본이라
-    // 새로 새는 정보도 없다.
-    let backup = if will_encrypt_memos(conn)? {
-        Some(crate::commands::crypto::backup_db_file(
-            conn,
-            db_path_state,
-            "-pre-upgrade",
-        )?)
     } else {
         None
     };
@@ -231,26 +215,14 @@ pub fn migrate_schema_impl(
         };
         let hint = if e.contains("외래키") {
             // 다시 열어도 같은 지점에서 멈춘다. 재시도를 권하면 안 된다.
-            "파일 안의 연결 정보가 어긋나 있습니다. 다시 열어도 같은 결과이므로,              백업 파일로 되돌리거나 도움을 요청해주세요."
+            "파일 안의 연결 정보가 어긋나 있습니다. 다시 열어도 같은 결과이므로, 백업 파일로 되돌리거나 도움을 요청해주세요."
         } else {
-            "디스크 여유 공간을 확인하고, 파일이 다른 프로그램에서 열려 있지 않은지              확인한 뒤 다시 열어주세요."
-        };
-        let backup_note = match &backup {
-            Some(p) => format!("
-복구용 백업이 남아 있습니다: {}", p.display()),
-            None => String::new(),
+            "디스크 여유 공간을 확인하고, 파일이 다른 프로그램에서 열려 있지 않은지 확인한 뒤 다시 열어주세요."
         };
         return Err(format!(
-            "파일 형식 업데이트(v{from} → v{}) 중 오류가 발생해 변경을 취소했습니다.              {state} {hint} ({e}){backup_note}",
+            "파일 형식 업데이트(v{from} → v{}) 중 오류가 발생해 변경을 취소했습니다. {state} {hint} ({e})",
             crate::db::SCHEMA_VERSION
         ));
-    }
-
-    // 평문 메모 사본을 남기지 않는다. 지우지 못하면 알린다 — 조용히 넘기면 사용자는
-    // 사본이 없는 줄 알지만 실제로는 남아 있게 된다. 마이그레이션은 이미 커밋됐으므로
-    // 다시 열면 정상 동작한다.
-    if let Some(path) = backup {
-        crate::commands::crypto::remove_backup_after_success(&path, "파일 형식 업데이트")?;
     }
 
     // 변환된 행이 있으면 마이그레이션 트랜잭션이 정리 표시를 남겼다. 옛 페이지에 남은
@@ -261,6 +233,9 @@ pub fn migrate_schema_impl(
     // purge_pending으로 알리고, 설정 화면에 "지금 정리" 버튼이 나온다.
     // (open_project_impl의 resume_pending_purge는 migrate보다 먼저 돌기 때문에
     //  이번 열기의 표시를 처리하지 못한다. 그래서 여기서 한 번 더 시도한다.)
+    //
+    // 이 정리가 끝난 뒤에야 백업을 떠야 한다. 프론트엔드가 migrate → backup 순서로
+    // 부르는 이유이기도 하다 — 정리 전에 뜨면 프리 페이지의 평문까지 사본에 담긴다.
     let _ = crate::commands::crypto::resume_pending_purge(conn);
 
     Ok(())
@@ -270,9 +245,8 @@ pub fn migrate_schema_impl(
 pub fn migrate_schema(
     state: State<DbState>,
     crypto: State<CryptoStateHandle>,
-    db_path: State<DbPathState>,
 ) -> Result<(), String> {
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
     let conn = guard.as_mut().ok_or("DB not open")?;
-    migrate_schema_impl(conn, &crypto, &db_path)
+    migrate_schema_impl(conn, &crypto)
 }

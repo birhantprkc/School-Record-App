@@ -246,8 +246,9 @@ async function handlePasswordSubmit(payload) {
           <AlertTriangle :size="16" class="flex-shrink-0 mt-1"/>
           <div class="flex flex-col items-start gap-2.5">
             <span>
-              암호화를 켜거나 비밀번호를 바꾼 뒤의 <strong>파일 정리가 끝나지 않았습니다.</strong>
-              파일 안에 이전 데이터의 흔적이 남아 있을 수 있습니다.
+              <strong>파일 정리가 끝나지 않았습니다.</strong>
+              암호화되기 전의 내용이 파일 안에 아직 남아 있을 수 있습니다.
+              이 상태에서는 파일을 가져간 사람이 비밀번호 없이도 그 내용을 볼 수 있습니다.
               파일을 다시 열면 자동으로 다시 시도합니다.
               정리가 계속 실패하는 원인은 아래 버튼을 누르면 확인할 수 있습니다.
             </span>
