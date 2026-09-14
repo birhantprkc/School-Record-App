@@ -27,7 +27,7 @@ const GROUPS = [
         <span class="text-base font-normal text-ink-5 ml-1.5">{{ note.date }}</span>
       </div>
 
-      <div v-for="group in GROUPS" :key="group.key">
+      <template v-for="group in GROUPS" :key="group.key">
         <div v-if="note[group.key]?.length" class="flex flex-col gap-2">
           <div class="flex items-center gap-1.5 text-lg font-semibold uppercase tracking-[0.05em] text-ink-3">
             <component :is="group.icon" :size="14" class="shrink-0" :class="group.tone"/>
@@ -37,7 +37,7 @@ const GROUPS = [
             <li v-for="item in note[group.key]" :key="item" class="text-base text-ink-2 leading-[1.5]">{{ item }}</li>
           </ul>
         </div>
-      </div>
+      </template>
 
       <hr v-if="index < notes.length - 1" class="border-0 border-t border-line-2 my-2 opacity-60"/>
     </template>
